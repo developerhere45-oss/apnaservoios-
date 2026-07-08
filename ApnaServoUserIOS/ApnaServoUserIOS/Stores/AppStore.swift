@@ -78,7 +78,7 @@ final class UserAppStore: ObservableObject {
     }
 
     var activeBookings: [Booking] {
-        bookings.filter { !["completed", "cancelled", "rejected"].contains($0.status) }
+        bookings.filter { !["completed", "cancelled", "rejected"].contains($0.progressStatus) }
     }
 
     func finishSplash() {
@@ -512,7 +512,7 @@ final class UserAppStore: ObservableObject {
                        let updated = liveBookings.first(where: { $0.id == selected.id || (!selected.bookingCode.isEmpty && $0.bookingCode == selected.bookingCode) }) {
                         latestBooking = updated
                     } else {
-                        latestBooking = liveBookings.first(where: { !["completed", "cancelled", "rejected"].contains($0.status) }) ?? liveBookings.first
+                        latestBooking = liveBookings.first(where: { !["completed", "cancelled", "rejected"].contains($0.progressStatus) }) ?? liveBookings.first
                     }
                 }
             }

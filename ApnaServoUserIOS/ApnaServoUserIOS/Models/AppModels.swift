@@ -148,13 +148,46 @@ struct Booking: Identifiable, Codable, Hashable {
 
     var displayId: String { bookingCode.isEmpty ? id : bookingCode }
     var amount: Int { finalAmount > 0 ? finalAmount : defaultAmount }
+    var normalizedStatus: String {
+        status.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var progressStatus: String {
+        switch normalizedStatus {
+        case "assigned", "partner_assigned", "partner_accepted":
+            return "accepted"
+        case "work_in_progress", "in_progress", "service_started":
+            return "started"
+        case "sent_to_partner", "sent", "searching", "processing", "created", "new", "open", "no_partner":
+            return "pending"
+        default:
+            return normalizedStatus
+        }
+    }
+
+    var hasPartnerDetails: Bool {
+        let cleanName = partnerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !partnerId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !partnerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        (!cleanName.isEmpty && cleanName != "ApnaServo Partner")
+    }
 
     var isAssigned: Bool {
-        ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"].contains(status)
+        if ["assigned", "partner_assigned", "partner_accepted"].contains(normalizedStatus) {
+            return hasPartnerDetails
+        }
+        ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"].contains(progressStatus)
+    }
+
+    var presentationStatus: String {
+        if ["cancelled", "rejected"].contains(progressStatus) {
+            return progressStatus
+        }
+        isAssigned ? progressStatus : "pending"
     }
 
     var isAmountApprovalPending: Bool {
-        status == "amount_pending"
+        progressStatus == "amount_pending"
     }
 
     var isPaymentSubmitted: Bool {
@@ -162,11 +195,11 @@ struct Booking: Identifiable, Codable, Hashable {
     }
 
     var canSubmitDirectPayment: Bool {
-        status == "amount_pending" && amount > 0 && ["pending", "none", ""].contains(quoteStatus)
+        progressStatus == "amount_pending" && amount > 0 && ["pending", "none", ""].contains(quoteStatus)
     }
 
     var statusTitle: String {
-        switch status {
+        switch presentationStatus {
         case "pending": return "Finding Partner"
         case "accepted": return "Partner Assigned"
         case "on_the_way": return "Partner On The Way"
@@ -176,7 +209,7 @@ struct Booking: Identifiable, Codable, Hashable {
         case "completed": return "Completed"
         case "cancelled": return "Cancelled"
         case "rejected": return "Rejected"
-        default: return status.replacingOccurrences(of: "_", with: " ").capitalized
+        default: return normalizedStatus.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 

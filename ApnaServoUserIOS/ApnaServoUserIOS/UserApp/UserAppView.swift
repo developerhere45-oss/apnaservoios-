@@ -1345,82 +1345,257 @@ struct BookingConfirmScreen: View {
 
 struct BookingConfirmedScreen: View {
     @EnvironmentObject private var store: UserAppStore
+    @State private var showSuccess = true
+    @State private var compactSuccess = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            TopBar(title: "Booking Confirmed", subtitle: store.latestBooking?.displayId ?? "", backAction: { store.navigate(.home) })
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    successHeader
-                    if let booking = store.latestBooking {
-                        BookingHistoryCard(booking: booking)
-                        if booking.status == "pending" {
-                            FindingPartnerCard()
-                        } else {
-                            PartnerAssignedCard(booking: booking)
-                        }
-                        Button("View Booking Status") {
-                            store.openTrack(booking)
-                        }
-                        .darkCTA()
-                    } else {
-                        EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
-                    }
-                }
-                .padding(18)
+        ZStack {
+            confirmedContent
+                .opacity(showSuccess ? 0 : 1)
+
+            if showSuccess {
+                BookingSuccessTransitionCard(compact: compactSuccess)
+                    .transition(.opacity)
+                    .zIndex(2)
             }
+        }
+        .background(AppTheme.bg)
+        .onAppear {
+            startSuccessTransition()
         }
         .task {
             await store.refreshLiveBookings()
         }
     }
 
-    private var successHeader: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.greenSoft)
-                    .frame(width: 92, height: 92)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 38, weight: .black))
-                    .foregroundStyle(AppTheme.green)
+    private var confirmedContent: some View {
+        VStack(spacing: 0) {
+            TopBar(
+                title: store.latestBooking?.isAssigned == true ? "Partner Assigned" : "Finding Partner",
+                subtitle: store.latestBooking?.displayId ?? "",
+                backAction: { store.navigate(.home) },
+                trailingTitle: "Help",
+                trailingIcon: "headphones"
+            ) {
+                store.navigate(.support)
             }
-            Text("Your request is confirmed")
-                .font(.system(size: 23, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text("We are searching nearby verified partners. You will be notified as soon as a partner accepts.")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
+            ScrollView(showsIndicators: false) {
+                if let booking = store.latestBooking {
+                    VStack(spacing: 16) {
+                        if booking.isAssigned {
+                            PartnerAssignedCard(booking: booking)
+                            BookingPendingDetailsCard(booking: booking)
+                        } else {
+                            FindingPartnerCard(booking: booking)
+                            BookingPendingDetailsCard(booking: booking)
+                            safetyNote
+                        }
+                        Button("View Booking Status") {
+                            store.openTrack(booking)
+                        }
+                        .roseCTA()
+                    }
+                    .padding(18)
+                    .padding(.bottom, 114)
+                } else {
+                    EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
+                        .padding(18)
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .androidCard(padding: 18, radius: 22)
+    }
+
+    private var safetyNote: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "shield.checkered")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(AppTheme.green)
+                .frame(width: 46, height: 46)
+                .background(AppTheme.greenSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your safety is our priority")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.ink.opacity(0.9))
+                Text("We only connect you with verified and trusted professionals.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.muted)
+            }
+            Spacer()
+        }
+        .androidCard(padding: 14, radius: 18, border: AppTheme.greenSoft, shadow: 3)
+    }
+
+    private func startSuccessTransition() {
+        showSuccess = true
+        compactSuccess = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                compactSuccess = true
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.85) {
+            withAnimation(.easeInOut(duration: 0.28)) {
+                showSuccess = false
+            }
+        }
+    }
+}
+
+struct BookingSuccessTransitionCard: View {
+    let compact: Bool
+
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            VStack(spacing: compact ? 8 : 18) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.greenSoft)
+                        .frame(width: compact ? 62 : 116, height: compact ? 62 : 116)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: compact ? 29 : 52, weight: .bold))
+                        .foregroundStyle(AppTheme.green)
+                    ForEach(0..<10, id: \.self) { index in
+                        Circle()
+                            .fill(index.isMultiple(of: 2) ? AppTheme.green : AppTheme.booking)
+                            .frame(width: compact ? 3 : 5, height: compact ? 3 : 5)
+                            .offset(x: compact ? 0 : CGFloat([-78, -52, -14, 38, 76, -68, -28, 24, 58, 84][index]),
+                                    y: compact ? 0 : CGFloat([-42, 34, -82, -66, 22, 64, 82, 70, -88, -10][index]))
+                            .opacity(compact ? 0 : 0.9)
+                    }
+                }
+                Text("Booking Confirmed!")
+                    .font(.system(size: compact ? 16 : 28, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                Text("Your booking has been received successfully.")
+                    .font(.system(size: compact ? 10 : 14, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(width: compact ? 210 : nil)
+            .padding(compact ? 22 : 24)
+            .background(compact ? Color.white : Color.clear, in: RoundedRectangle(cornerRadius: compact ? 22 : 0, style: .continuous))
+            .shadow(color: .black.opacity(compact ? 0.18 : 0), radius: compact ? 22 : 0, y: compact ? 10 : 0)
+            .scaleEffect(compact ? 0.92 : 1)
+            .animation(.spring(response: 0.55, dampingFraction: 0.82), value: compact)
+        }
     }
 }
 
 struct FindingPartnerCard: View {
+    var booking: Booking? = nil
+    @State private var sweep = false
+
     var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle().stroke(AppTheme.bookingSoft, lineWidth: 18).frame(width: 130, height: 130)
-                Circle().stroke(AppTheme.booking.opacity(0.28), lineWidth: 9).frame(width: 96, height: 96)
-                ProgressView()
-                    .tint(AppTheme.booking)
-                    .scaleEffect(1.35)
-                Image(systemName: "location.north.fill")
+        VStack(spacing: 18) {
+            ZStack(alignment: .center) {
+                ForEach([150, 112, 74], id: \.self) { size in
+                    Circle()
+                        .stroke(AppTheme.booking.opacity(size == 150 ? 0.13 : 0.20), lineWidth: 1.2)
+                        .frame(width: CGFloat(size), height: CGFloat(size))
+                        .background(AppTheme.bookingSoft.opacity(size == 74 ? 0.85 : 0.28), in: Circle())
+                }
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [AppTheme.booking.opacity(0.7), AppTheme.booking.opacity(0.05)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 70, height: 2.5)
+                    .offset(x: 35)
+                    .rotationEffect(.degrees(sweep ? 360 : 0), anchor: .leading)
+                    .animation(.linear(duration: 1.45).repeatForever(autoreverses: false), value: sweep)
+                Circle()
+                    .fill(AppTheme.booking)
+                    .frame(width: 15, height: 15)
+                Image(systemName: "person.crop.circle.badge.magnifyingglass")
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(AppTheme.booking)
-                    .offset(x: 42, y: -36)
+                    .offset(y: -82)
             }
-            Text("Finding best partner")
-                .font(.system(size: 18, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text("Request sent to nearby verified ApnaServo experts. This screen updates automatically when a partner accepts.")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text("Finding the best expert for you...")
+                    .font(.system(size: 23, weight: .bold))
+                    .foregroundStyle(AppTheme.bookingDark)
+                    .multilineTextAlignment(.center)
+                Text("Searching nearby verified partners")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                if let booking {
+                    Text("Booking ID: \(booking.displayId)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.booking)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(AppTheme.bookingSoft, in: Capsule())
+                }
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "bell.fill")
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 42, height: 42)
+                    .background(AppTheme.bookingSoft, in: Circle())
+                Text("We will notify you once a partner is assigned.")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink.opacity(0.82))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .background(AppTheme.greenSoft.opacity(0.65), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
         }
         .frame(maxWidth: .infinity)
-        .androidCard(padding: 18, radius: 22, border: AppTheme.bookingSoft)
+        .androidCard(padding: 18, radius: 24, border: AppTheme.bookingSoft, shadow: 7)
+        .onAppear {
+            sweep = true
+        }
+    }
+}
+
+struct BookingPendingDetailsCard: View {
+    let booking: Booking
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Booking ID")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                    Text(booking.displayId)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(AppTheme.bookingDark)
+                }
+                Spacer()
+                Label("Copy", systemImage: "doc.on.doc")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+            }
+            Divider()
+            detailRow("wrench.and.screwdriver.fill", "Service", booking.serviceName)
+            detailRow("calendar", "Date & Time", booking.slot)
+            detailRow("mappin.circle.fill", "Address", booking.address)
+        }
+        .androidCard(padding: 16, radius: 20)
+    }
+
+    private func detailRow(_ icon: String, _ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.green)
+                .frame(width: 42, height: 42)
+                .background(AppTheme.greenSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                Text(value)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
@@ -1476,14 +1651,16 @@ struct TrackBookingScreen: View {
             ScrollView(showsIndicators: false) {
                 if let booking = store.latestBooking {
                     VStack(spacing: 16) {
-                        BookingStatusHeader(booking: booking)
                         if booking.isAssigned {
+                            BookingStatusHeader(booking: booking)
                             PartnerAssignedCard(booking: booking)
+                            BookingProgressTimeline(booking: booking)
+                            LiveStatusMapCard(booking: booking)
                         } else {
-                            FindingPartnerCard()
+                            FindingPartnerCard(booking: booking)
+                            BookingPendingDetailsCard(booking: booking)
+                            BookingProgressTimeline(booking: booking)
                         }
-                        BookingProgressTimeline(booking: booking)
-                        LiveStatusMapCard(booking: booking)
                         if booking.isAmountApprovalPending {
                             AmountApprovalCard(booking: booking)
                         }
@@ -1523,7 +1700,7 @@ struct BookingStatusHeader: View {
                         .foregroundStyle(AppTheme.muted)
                 }
                 Spacer()
-                StatusChip(status: booking.status)
+                StatusChip(status: booking.presentationStatus)
             }
             Text(booking.issue)
                 .font(.system(size: 13))
@@ -1574,8 +1751,8 @@ struct BookingProgressTimeline: View {
     }
 
     private var activeIndex: Int {
-        if booking.status == "amount_pending" { return 4 }
-        return steps.firstIndex { $0.0 == booking.status } ?? 0
+        if booking.presentationStatus == "amount_pending" { return 4 }
+        return steps.firstIndex { $0.0 == booking.presentationStatus } ?? 0
     }
 
     private func timelineRow(title: String, active: Bool, isLast: Bool) -> some View {
@@ -1744,13 +1921,13 @@ struct BookingsListScreen: View {
     private var filteredBookings: [Booking] {
         switch filter {
         case "Pending":
-            return store.bookings.filter { $0.status == "pending" }
+            return store.bookings.filter { $0.presentationStatus == "pending" }
         case "Ongoing":
-            return store.bookings.filter { !["pending", "completed", "cancelled", "rejected"].contains($0.status) }
+            return store.bookings.filter { !["pending", "completed", "cancelled", "rejected"].contains($0.presentationStatus) }
         case "Completed":
-            return store.bookings.filter { $0.status == "completed" }
+            return store.bookings.filter { $0.presentationStatus == "completed" }
         case "Cancelled":
-            return store.bookings.filter { ["cancelled", "rejected"].contains($0.status) }
+            return store.bookings.filter { ["cancelled", "rejected"].contains($0.presentationStatus) }
         default:
             return store.bookings
         }
@@ -1767,7 +1944,7 @@ struct BookingHistoryCard: View {
         } label: {
             HStack(spacing: 12) {
                 Rectangle()
-                    .fill(statusColor(booking.status))
+                    .fill(statusColor(booking.presentationStatus))
                     .frame(width: 5)
                     .clipShape(Capsule())
                 ServiceLogo(service: ServiceCatalog.service(id: booking.serviceCategory), size: 54)
@@ -1778,7 +1955,7 @@ struct BookingHistoryCard: View {
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                         Spacer()
-                        StatusChip(status: booking.status)
+                        StatusChip(status: booking.presentationStatus)
                     }
                     Text(booking.displayId)
                         .font(.system(size: 11, weight: .bold))
@@ -2388,7 +2565,7 @@ struct StatusChip: View {
 }
 
 func statusTitle(_ status: String) -> String {
-    switch status {
+    switch displayStatusKey(status) {
     case "pending": return "PENDING"
     case "accepted": return "ASSIGNED"
     case "on_the_way": return "ON WAY"
@@ -2403,11 +2580,25 @@ func statusTitle(_ status: String) -> String {
 }
 
 func statusColor(_ status: String) -> Color {
-    switch status {
+    switch displayStatusKey(status) {
     case "completed": return AppTheme.green
     case "accepted", "on_the_way", "arrived", "started": return AppTheme.blue
     case "amount_pending": return AppTheme.orange
     case "cancelled", "rejected": return AppTheme.muted
     default: return AppTheme.booking
+    }
+}
+
+private func displayStatusKey(_ status: String) -> String {
+    let clean = status.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    switch clean {
+    case "assigned", "partner_assigned", "partner_accepted":
+        return "accepted"
+    case "work_in_progress", "in_progress", "service_started":
+        return "started"
+    case "sent_to_partner", "sent", "searching", "processing", "created", "new", "open", "no_partner":
+        return "pending"
+    default:
+        return clean
     }
 }
