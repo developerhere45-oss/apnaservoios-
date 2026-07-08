@@ -303,16 +303,13 @@ struct StartupLocationGateScreen: View {
     var body: some View {
         VStack(spacing: 22) {
             Spacer()
-            ZStack {
-                Circle()
-                    .fill(AppTheme.roseSoft)
-                    .frame(width: 210, height: 210)
-                AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
-                    .frame(width: 142, height: 142)
-            }
+            Image(systemName: "location.fill")
+                .font(.system(size: 92, weight: .bold))
+                .foregroundStyle(AppTheme.booking)
+                .shadow(color: AppTheme.booking.opacity(0.18), radius: 12, y: 6)
             VStack(spacing: 8) {
                 Text("Enable service location")
-                    .font(.system(size: 26, weight: .black))
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(AppTheme.ink)
                 Text("ApnaServo uses your location to show nearby verified partners in Guwahati.")
                     .font(.system(size: 14))

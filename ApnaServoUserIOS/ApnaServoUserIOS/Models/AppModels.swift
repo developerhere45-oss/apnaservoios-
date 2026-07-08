@@ -176,14 +176,14 @@ struct Booking: Identifiable, Codable, Hashable {
         if ["assigned", "partner_assigned", "partner_accepted"].contains(normalizedStatus) {
             return hasPartnerDetails
         }
-        ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"].contains(progressStatus)
+        return ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"].contains(progressStatus)
     }
 
     var presentationStatus: String {
         if ["cancelled", "rejected"].contains(progressStatus) {
             return progressStatus
         }
-        isAssigned ? progressStatus : "pending"
+        return isAssigned ? progressStatus : "pending"
     }
 
     var isAmountApprovalPending: Bool {
