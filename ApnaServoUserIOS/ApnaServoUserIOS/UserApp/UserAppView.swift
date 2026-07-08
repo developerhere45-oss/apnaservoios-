@@ -337,22 +337,24 @@ struct HomeScreen: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 18) {
-                HomeHero()
-                QuickServiceStrip()
-                CommercialHomeCard()
-                ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
-                if !store.bookings.isEmpty {
-                    RecentBookingSection()
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 18) {
+                    HomeHero()
+                    QuickServiceStrip()
+                    CommercialHomeCard()
+                    ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
+                    if !store.bookings.isEmpty {
+                        RecentBookingSection()
+                    }
+                    ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
+                    WhyChooseCard()
                 }
-                ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
-                WhyChooseCard()
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 128)
+                .frame(width: proxy.size.width, alignment: .top)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 128)
-            .frame(maxWidth: .infinity, alignment: .top)
         }
         .background(AppTheme.bg)
     }
@@ -362,129 +364,141 @@ struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        ZStack(alignment: .top) {
-            AndroidAssetImage(name: "banner_ac_service", contentMode: .fill)
-                .frame(height: 398)
-                .frame(maxWidth: .infinity)
-                .clipped()
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.82),
-                    Color.white.opacity(0.45),
-                    AppTheme.bg.opacity(0.78)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomLeading
-            )
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                AndroidAssetImage(name: "banner_ac_service", contentMode: .fill)
+                    .frame(width: proxy.size.width, height: 398)
+                    .clipped()
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.82),
+                        Color.white.opacity(0.45),
+                        AppTheme.bg.opacity(0.78)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomLeading
+                )
+                .frame(width: proxy.size.width, height: 398)
 
-            VStack(spacing: 12) {
-                HStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.65))
-                        .frame(width: 34, height: 34)
-                        .overlay(
-                            Image(systemName: "shield.checkered")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(AppTheme.booking)
-                        )
-
-                    Spacer()
-
-                    AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
-                        .frame(width: 184, height: 54)
-
-                    Spacer()
-
-                    Button {
-                        store.navigate(.notifications)
-                    } label: {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(AppTheme.booking)
+                VStack(spacing: 12) {
+                    HStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.65))
                             .frame(width: 34, height: 34)
-                            .background(.white, in: Circle())
-                            .overlay(alignment: .topTrailing) {
-                                if store.notifications.contains(where: { !$0.isRead }) {
-                                    Circle().fill(AppTheme.booking).frame(width: 9, height: 9)
+                            .overlay(
+                                Image(systemName: "shield.checkered")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(AppTheme.booking)
+                            )
+
+                        Spacer(minLength: 8)
+
+                        AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                            .frame(width: min(184, proxy.size.width * 0.52), height: 54)
+
+                        Spacer(minLength: 8)
+
+                        Button {
+                            store.navigate(.notifications)
+                        } label: {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(AppTheme.booking)
+                                .frame(width: 34, height: 34)
+                                .background(.white, in: Circle())
+                                .overlay(alignment: .topTrailing) {
+                                    if store.notifications.contains(where: { !$0.isRead }) {
+                                        Circle().fill(AppTheme.booking).frame(width: 9, height: 9)
+                                    }
                                 }
-                            }
-                    }
-                }
-
-                Text("Home services at your doorstep")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                Button {
-                    store.showAllServices()
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(AppTheme.rose)
-                        Text("Search for services (AC repair, plumber...)")
-                            .lineLimit(1)
-                        Spacer()
-                        Rectangle()
-                            .fill(AppTheme.line)
-                            .frame(width: 1, height: 30)
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppTheme.rose)
-                    }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.muted)
-                    .padding(.horizontal, 18)
-                    .frame(height: 58)
-                    .background(Color.white, in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
-                    .shadow(color: AppTheme.booking.opacity(0.16), radius: 10, y: 5)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("VERIFIED SERVICE")
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundStyle(AppTheme.rose)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("AC REPAIR")
-                            .font(.system(size: 34, weight: .black))
-                            .foregroundStyle(AppTheme.ink)
-                        Text("Inspection - Cleaning - Gas refill")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(AppTheme.ink.opacity(0.85))
-                    }
-                    Button {
-                        store.openService(ServiceCatalog.service(id: "ac"))
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("Book Slot")
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .black))
                         }
+                    }
+
+                    Text("Home services at your doorstep")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    Button {
+                        store.showAllServices()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 21, weight: .medium))
+                                .foregroundStyle(AppTheme.rose)
+                                .frame(width: 24)
+                            Text("Search for services (AC repair, plumber...)")
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Rectangle()
+                                .fill(AppTheme.line)
+                                .frame(width: 1, height: 30)
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(AppTheme.rose)
+                                .frame(width: 24)
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.muted)
+                        .padding(.horizontal, 16)
+                        .frame(width: proxy.size.width - 28, height: 58)
+                        .background(Color.white, in: Capsule())
+                        .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
+                        .shadow(color: AppTheme.booking.opacity(0.16), radius: 10, y: 5)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("VERIFIED SERVICE")
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(AppTheme.rose)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("AC REPAIR")
+                                .font(.system(size: 33, weight: .black))
+                                .foregroundStyle(AppTheme.ink)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                            Text("Inspection - Cleaning - Gas refill")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(AppTheme.ink.opacity(0.85))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                        Button {
+                            store.openService(ServiceCatalog.service(id: "ac"))
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("Book Slot")
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .black))
+                            }
                             .font(.system(size: 15, weight: .black))
                             .foregroundStyle(.white)
                             .frame(width: 126, height: 48)
                             .background(Color(hex: 0x11141A), in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.booking, lineWidth: 1))
-                            .shadow(color: AppTheme.booking.opacity(0.28), radius: 6, y: 3)
-                    }
-
-                    HStack(spacing: 8) {
-                        ForEach(0..<5, id: \.self) { index in
-                            Circle()
-                                .fill(index == 1 ? AppTheme.ink : AppTheme.line)
-                                .frame(width: index == 1 ? 8 : 7, height: index == 1 ? 8 : 7)
+                                .overlay(Capsule().stroke(AppTheme.booking, lineWidth: 1))
+                                .shadow(color: AppTheme.booking.opacity(0.28), radius: 6, y: 3)
                         }
+
+                        HStack(spacing: 8) {
+                            ForEach(0..<5, id: \.self) { index in
+                                Circle()
+                                    .fill(index == 1 ? AppTheme.ink : AppTheme.line)
+                                    .frame(width: index == 1 ? 8 : 7, height: index == 1 ? 8 : 7)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: proxy.size.width - 28)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
             }
-            .padding(14)
+            .frame(width: proxy.size.width, height: 398)
         }
         .frame(height: 398)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -497,31 +511,31 @@ struct QuickServiceStrip: View {
     private let quickIds = ["ac", "electrician", "plumbing", "cleaning", "appliances"]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(quickIds, id: \.self) { id in
-                    let service = ServiceCatalog.service(id: id)
-                    Button {
-                        store.openService(service)
-                    } label: {
-                        VStack(spacing: 10) {
-                            ServiceLogo(service: service, size: 62)
-                            Text(quickTitle(for: service))
-                                .font(.system(size: 12, weight: .black))
-                                .foregroundStyle(AppTheme.ink)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .frame(height: 30)
-                        }
-                        .frame(width: 78, height: 128)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.roseSoft, lineWidth: 1.2))
+        HStack(spacing: 6) {
+            ForEach(quickIds, id: \.self) { id in
+                let service = ServiceCatalog.service(id: id)
+                Button {
+                    store.openService(service)
+                } label: {
+                    VStack(spacing: 8) {
+                        ServiceLogo(service: service, size: 52)
+                        Text(quickTitle(for: service))
+                            .font(.system(size: 10.5, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.78)
+                            .frame(height: 30)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 120)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.roseSoft, lineWidth: 1.2))
                 }
+                .buttonStyle(.plain)
             }
-            .padding(10)
         }
+        .padding(10)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(AppTheme.line, lineWidth: 1))
         .shadow(color: .black.opacity(0.10), radius: 10, y: 5)
@@ -543,59 +557,64 @@ struct CommercialHomeCard: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        Button {
-            store.navigate(.commercial)
-        } label: {
-            ZStack(alignment: .leading) {
-                AndroidAssetImage(name: "commercial_home_card", contentMode: .fill)
-                    .frame(height: 172)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                LinearGradient(
-                    colors: [AppTheme.bg.opacity(0.94), AppTheme.bg.opacity(0.63), .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "building.2.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(AppTheme.bookingDark)
-                            .frame(width: 46, height: 46)
-                            .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
-                        Text("COMMERCIAL\nSERVICES")
-                            .font(.system(size: 24, weight: .black))
-                            .foregroundStyle(AppTheme.bookingDark)
-                            .lineSpacing(-2)
+        GeometryReader { proxy in
+            Button {
+                store.navigate(.commercial)
+            } label: {
+                ZStack(alignment: .leading) {
+                    AndroidAssetImage(name: "commercial_home_card", contentMode: .fill)
+                        .frame(width: proxy.size.width, height: 172)
+                        .clipped()
+                    LinearGradient(
+                        colors: [AppTheme.bg.opacity(0.94), AppTheme.bg.opacity(0.63), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: proxy.size.width, height: 172)
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "building.2.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(AppTheme.bookingDark)
+                                .frame(width: 42, height: 42)
+                                .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
+                            Text("COMMERCIAL\nSERVICES")
+                                .font(.system(size: 23, weight: .black))
+                                .foregroundStyle(AppTheme.bookingDark)
+                                .lineSpacing(-2)
+                                .minimumScaleFactor(0.85)
+                        }
+                        Text("Offices, shops, hotels, warehouses & more.")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(AppTheme.muted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        HStack(spacing: 12) {
+                            Label("Professional team", systemImage: "checkmark")
+                            Label("On-time service", systemImage: "clock.fill")
+                        }
+                        .font(.system(size: 9.5, weight: .black))
+                        .foregroundStyle(AppTheme.bookingDark)
+                        Text("Business Enquiry >")
+                            .font(.system(size: 13.5, weight: .black))
+                            .foregroundStyle(.white)
+                            .frame(width: 136, height: 40)
+                            .background(
+                                LinearGradient(colors: [AppTheme.bookingDark, AppTheme.booking], startPoint: .leading, endPoint: .trailing),
+                                in: Capsule()
+                            )
                     }
-                    Text("Offices, shops, hotels, warehouses & more.")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.muted)
-                        .lineLimit(1)
-                    HStack(spacing: 16) {
-                        Label("Professional team", systemImage: "checkmark")
-                        Label("On-time service", systemImage: "clock.fill")
-                    }
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(AppTheme.bookingDark)
-                    Text("Business Enquiry >")
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(width: 142, height: 42)
-                        .background(
-                            LinearGradient(colors: [AppTheme.bookingDark, AppTheme.booking], startPoint: .leading, endPoint: .trailing),
-                            in: Capsule()
-                        )
+                    .padding(.leading, 16)
+                    .padding(.vertical, 14)
+                    .frame(width: proxy.size.width, alignment: .leading)
                 }
-                .padding(.leading, 18)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.14), radius: 10, y: 6)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.line, lineWidth: 1))
-            .shadow(color: .black.opacity(0.14), radius: 10, y: 6)
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .frame(height: 172)
     }
 }
 
@@ -642,11 +661,13 @@ struct HomeServiceCard: View {
             store.openService(service)
         } label: {
             VStack(spacing: 10) {
-                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
-                    .frame(height: 84)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                GeometryReader { proxy in
+                    AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
+                        .frame(width: proxy.size.width, height: 78)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .frame(height: 78)
                 Text(service.name)
                     .font(.system(size: 12, weight: .black))
                     .foregroundStyle(AppTheme.ink)
