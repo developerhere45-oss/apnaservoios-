@@ -73,8 +73,9 @@ final class APIClient {
         let _: EmptyResponse? = try? await request(path: path, method: "PATCH", token: token, body: [:])
     }
 
-    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fcmToken: String, token: String) async throws -> Booking {
+    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, bookingCode: String, fcmToken: String, token: String) async throws -> Booking {
         let body: [String: Any] = [
+            "bookingCode": bookingCode,
             "serviceCategory": service.id,
             "serviceName": service.name,
             "serviceTier": draft.tier.rawValue,
@@ -97,20 +98,10 @@ final class APIClient {
             "userFcmToken": fcmToken
         ]
         let envelope: BookingEnvelope = try await request(path: "/bookings", method: "POST", token: token, body: body)
-        return envelope.booking ?? Booking(
-            id: "local-\(UUID().uuidString)",
-            bookingCode: "",
-            serviceCategory: service.id,
-            serviceName: service.name,
-            issue: draft.problem,
-            address: draft.address,
-            slot: draft.slot,
-            customerName: profile.name,
-            userPhone: profile.phone,
-            defaultAmount: 0,
-            lat: draft.lat,
-            lng: draft.lng
-        )
+        if let booking = envelope.booking {
+            return booking
+        }
+        throw APIError.badResponse("Booking was not created by the backend.")
     }
 
     func fetchUserBookings(token: String) async throws -> [Booking] {
@@ -132,6 +123,19 @@ final class APIClient {
             method: "PATCH",
             token: token,
             body: ["status": status, "finalAmount": finalAmount]
+        )
+        if let booking = envelope.booking {
+            return booking
+        }
+        return try await getBooking(bookingId, token: token)
+    }
+
+    func submitDirectPayment(_ bookingId: String, token: String) async throws -> Booking {
+        let envelope: BookingEnvelope = try await request(
+            path: "/bookings/\(bookingId)/payment-submitted",
+            method: "POST",
+            token: token,
+            body: [:]
         )
         if let booking = envelope.booking {
             return booking
@@ -277,8 +281,10 @@ final class APIClient {
             request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
             return
         }
+        #if DEBUG
         request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
         request.setValue("user", forHTTPHeaderField: "x-apnaservo-dev-role")
+        #endif
     }
 
     private func deviceAuthUID() -> String {

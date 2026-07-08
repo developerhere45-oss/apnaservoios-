@@ -59,6 +59,7 @@ final class UserAppStore: ObservableObject {
     private let api = APIClient()
     private let notificationService = AppNotificationService()
     private let authToken = ""
+    private var bookingSyncTask: Task<Void, Never>?
 
     init() {
         notificationService.configure()
@@ -117,6 +118,7 @@ final class UserAppStore: ObservableObject {
             await syncUserProfile()
             await loadLiveBookings()
         }
+        startLiveBookingSync()
     }
 
     func finishLocationGate() {
@@ -127,6 +129,7 @@ final class UserAppStore: ObservableObject {
             await syncUserProfile()
             await loadLiveBookings()
         }
+        startLiveBookingSync()
     }
 
     func openService(_ service: ServiceItem) {
@@ -215,20 +218,21 @@ final class UserAppStore: ObservableObject {
     }
 
     func confirmBooking() {
+        let bookingCode = makeBookingCode()
         let issue = draft.problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Service request - \(selectedService.name)"
             : "Service request - \(draft.problem)"
         let booking = Booking(
-            id: "AS\(Int(Date().timeIntervalSince1970))",
-            bookingCode: "AS\(Int(Date().timeIntervalSince1970) % 100000)",
+            id: bookingCode,
+            bookingCode: bookingCode,
             serviceCategory: selectedService.id,
             serviceName: selectedService.name,
             issue: issue,
             address: bookingAddressPreview(),
             slot: "\(draft.date), \(draft.time)",
             status: "pending",
-            partnerName: "ApnaServo Partner",
-            partnerPhone: "9876543210",
+            partnerName: "",
+            partnerPhone: "",
             customerName: profile.name.isEmpty ? "ApnaServo Customer" : profile.name,
             userPhone: profile.phone,
             defaultAmount: 0,
@@ -243,20 +247,9 @@ final class UserAppStore: ObservableObject {
         ]
         navigate(.bookingConfirmed)
         Task {
-            await submitBookingToBackend(service: selectedService, draft: draft, profile: profile, fallbackId: booking.id)
+            await submitBookingToBackend(service: selectedService, draft: draft, profile: profile, bookingCode: bookingCode, fallbackId: booking.id)
+            startLiveBookingSync()
         }
-    }
-
-    func assignPartner() {
-        guard var booking = latestBooking else { return }
-        booking.status = "accepted"
-        booking.partnerName = "Rahul Kumar"
-        latestBooking = booking
-        upsertBooking(booking)
-        addNotification(title: "Partner assigned", body: "\(booking.partnerName) accepted \(booking.displayId). Track live status now.", type: "partner_assigned", bookingId: booking.id)
-        bookingChatMessages = [
-            ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat directly with Rahul Kumar. Keep payments and service details inside ApnaServo.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
-        ]
     }
 
     func openTrack(_ booking: Booking? = nil) {
@@ -266,26 +259,23 @@ final class UserAppStore: ObservableObject {
         navigate(.track)
     }
 
-    func advanceBookingStatus() {
-        guard var booking = latestBooking else { return }
-        let flow = ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"]
-        let currentIndex = flow.firstIndex(of: booking.status) ?? 0
-        let next = flow[min(currentIndex + 1, flow.count - 1)]
-        booking.status = next
-        if next == "amount_pending" {
-            booking.quoteStatus = "pending_customer"
-        }
-        latestBooking = booking
-        upsertBooking(booking)
-    }
-
     func approveAmount() {
-        guard var booking = latestBooking else { return }
-        booking.status = "completed"
-        booking.quoteStatus = "approved"
-        latestBooking = booking
-        upsertBooking(booking)
-        toastMessage = "Amount approved."
+        guard let booking = latestBooking else { return }
+        guard booking.amount > 0 else {
+            toastMessage = "Final amount has not been shared yet."
+            return
+        }
+        Task {
+            do {
+                let updated = try await api.submitDirectPayment(booking.id, token: authToken)
+                latestBooking = updated
+                upsertBooking(updated)
+                toastMessage = "Payment submitted. Waiting for partner verification."
+                await refreshLiveBookings()
+            } catch {
+                toastMessage = "Payment could not be submitted. Please try again."
+            }
+        }
     }
 
     func openBookingChat(_ booking: Booking? = nil) {
@@ -294,12 +284,29 @@ final class UserAppStore: ObservableObject {
         }
         guard latestBooking != nil else { return }
         navigate(.bookingChat)
+        Task { await refreshBookingChat() }
     }
 
     func sendBookingChat(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let booking = latestBooking, !clean.isEmpty else { return }
-        bookingChatMessages.append(ChatMessage.local(text: clean, booking: booking))
+        let local = ChatMessage.local(text: clean, booking: booking)
+        bookingChatMessages.append(local)
+        Task {
+            do {
+                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: authToken)
+                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
+                    bookingChatMessages[index] = sent
+                } else {
+                    bookingChatMessages.append(sent)
+                }
+                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: authToken)
+            } catch {
+                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
+                    bookingChatMessages[index].deliveryStatus = "retry"
+                }
+            }
+        }
     }
 
     func sendSupportMessage(_ text: String) {
@@ -334,6 +341,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func logout() {
+        stopLiveBookingSync()
         profile = UserProfile()
         latestBooking = nil
         bookings = []
@@ -352,6 +360,44 @@ final class UserAppStore: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         return parts.joined(separator: ", ")
+    }
+
+    func startLiveBookingSync() {
+        guard isLoggedIn else { return }
+        bookingSyncTask?.cancel()
+        bookingSyncTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshLiveBookings()
+                try? await Task.sleep(nanoseconds: AppConfig.bookingStatusRefreshSeconds)
+            }
+        }
+    }
+
+    func stopLiveBookingSync() {
+        bookingSyncTask?.cancel()
+        bookingSyncTask = nil
+    }
+
+    func refreshLiveBookings() async {
+        await loadLiveBookings()
+    }
+
+    func refreshBookingChat() async {
+        guard let booking = latestBooking else { return }
+        do {
+            let messages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: authToken)
+            let pendingLocalMessages = bookingChatMessages.filter { message in
+                message.bookingId == booking.id && ["queued", "retry"].contains(message.deliveryStatus)
+            }
+            let backendClientIds = Set(messages.map(\.clientMessageId).filter { !$0.isEmpty })
+            let mergedPending = pendingLocalMessages.filter { message in
+                message.clientMessageId.isEmpty || !backendClientIds.contains(message.clientMessageId)
+            }
+            bookingChatMessages = (messages + mergedPending).sorted { $0.createdAtMillis < $1.createdAtMillis }
+            await api.markBookingChatSeen(bookingId: booking.id, token: authToken)
+        } catch {
+            // Keep queued/local messages visible if the network is temporarily unavailable.
+        }
     }
 
     private func upsertBooking(_ booking: Booking) {
@@ -377,6 +423,12 @@ final class UserAppStore: ObservableObject {
         )
     }
 
+    private func makeBookingCode() -> String {
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        let random = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(6).uppercased()
+        return "AS\(timestamp)\(random)"
+    }
+
     private func syncUserProfile() async {
         do {
             try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: authToken)
@@ -392,8 +444,14 @@ final class UserAppStore: ObservableObject {
             let liveBookings = try await api.fetchUserBookings(token: authToken)
             if !liveBookings.isEmpty {
                 await MainActor.run {
+                    let selected = latestBooking
                     bookings = liveBookings
-                    latestBooking = liveBookings.first
+                    if let selected,
+                       let updated = liveBookings.first(where: { $0.id == selected.id || (!selected.bookingCode.isEmpty && $0.bookingCode == selected.bookingCode) }) {
+                        latestBooking = updated
+                    } else {
+                        latestBooking = liveBookings.first(where: { !["completed", "cancelled", "rejected"].contains($0.status) }) ?? liveBookings.first
+                    }
                 }
             }
         } catch {
@@ -401,12 +459,13 @@ final class UserAppStore: ObservableObject {
         }
     }
 
-    private func submitBookingToBackend(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fallbackId: String) async {
+    private func submitBookingToBackend(service: ServiceItem, draft: BookingDraft, profile: UserProfile, bookingCode: String, fallbackId: String) async {
         do {
             let liveBooking = try await api.createBooking(
                 service: service,
                 draft: draft,
                 profile: profile,
+                bookingCode: bookingCode,
                 fcmToken: notificationService.fcmToken,
                 token: authToken
             )
@@ -419,9 +478,15 @@ final class UserAppStore: ObservableObject {
                 }
                 toastMessage = "Booking sent to live backend."
             }
+            await refreshLiveBookings()
         } catch {
             await MainActor.run {
-                toastMessage = "Booking saved locally. Live sync will retry when backend is reachable."
+                bookings.removeAll { $0.id == fallbackId || $0.bookingCode == bookingCode }
+                if latestBooking?.id == fallbackId || latestBooking?.bookingCode == bookingCode {
+                    latestBooking = bookings.first
+                }
+                navigate(.confirm)
+                toastMessage = "Booking could not be created. Please check network and try again."
             }
         }
     }

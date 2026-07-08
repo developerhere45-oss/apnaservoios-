@@ -276,8 +276,10 @@ final class APIClient {
             request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
             return
         }
+        #if DEBUG
         request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
         request.setValue("partner", forHTTPHeaderField: "x-apnaservo-dev-role")
+        #endif
     }
 
     private func deviceAuthUID() -> String {

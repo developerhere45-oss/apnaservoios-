@@ -21,6 +21,9 @@ struct UserAppView: View {
                 BottomNav()
             }
         }
+        .onAppear {
+            store.startLiveBookingSync()
+        }
         .background(AppTheme.bg)
     }
 
@@ -1232,7 +1235,7 @@ struct AddressSelectionCard: View {
                 .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)
-            MockMapPreview()
+            ServiceLocationPreview()
         }
     }
 
@@ -1260,7 +1263,7 @@ struct AddressSelectionCard: View {
     }
 }
 
-struct MockMapPreview: View {
+struct ServiceLocationPreview: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(hex: 0xE5F2EC), Color(hex: 0xFDF7F2)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -1364,10 +1367,6 @@ struct BookingConfirmedScreen: View {
                         BookingHistoryCard(booking: booking)
                         if booking.status == "pending" {
                             FindingPartnerCard()
-                            Button("Partner Assigned Demo") {
-                                store.assignPartner()
-                            }
-                            .roseCTA()
                         } else {
                             PartnerAssignedCard(booking: booking)
                         }
@@ -1381,6 +1380,9 @@ struct BookingConfirmedScreen: View {
                 }
                 .padding(18)
             }
+        }
+        .task {
+            await store.refreshLiveBookings()
         }
     }
 
@@ -1423,7 +1425,7 @@ struct FindingPartnerCard: View {
             Text("Finding best partner")
                 .font(.system(size: 18, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            Text("Request sent to nearby ApnaServo experts. Partner assignment style matches Android pending booking cards.")
+            Text("Request sent to nearby verified ApnaServo experts. This screen updates automatically when a partner accepts.")
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)
@@ -1439,13 +1441,13 @@ struct PartnerAssignedCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack(spacing: 12) {
-                Text(String(booking.partnerName.prefix(1)))
+                Text(String(displayName.prefix(1)))
                     .font(.system(size: 22, weight: .black))
                     .foregroundStyle(.white)
                     .frame(width: 58, height: 58)
                     .background(AppTheme.green, in: Circle())
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(booking.partnerName)
+                    Text(displayName)
                         .font(.system(size: 17, weight: .black))
                         .foregroundStyle(AppTheme.ink)
                     Text("Verified expert - 4.8 rating")
@@ -1469,6 +1471,11 @@ struct PartnerAssignedCard: View {
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.greenSoft)
     }
+
+    private var displayName: String {
+        let clean = booking.partnerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? "Assigned Partner" : clean
+    }
 }
 
 struct TrackBookingScreen: View {
@@ -1485,27 +1492,15 @@ struct TrackBookingScreen: View {
                             PartnerAssignedCard(booking: booking)
                         } else {
                             FindingPartnerCard()
-                            Button("Partner Assigned Demo") {
-                                store.assignPartner()
-                            }
-                            .roseCTA()
                         }
                         BookingProgressTimeline(booking: booking)
-                        MockLiveMapCard(booking: booking)
+                        LiveStatusMapCard(booking: booking)
                         if booking.isAmountApprovalPending {
                             AmountApprovalCard(booking: booking)
                         }
-                        HStack(spacing: 10) {
+                        if booking.isAssigned {
                             Button("Chat") {
                                 store.openBookingChat(booking)
-                            }
-                            .outlineCTA()
-                            Button("Next Status") {
-                                if booking.status == "pending" {
-                                    store.assignPartner()
-                                } else {
-                                    store.advanceBookingStatus()
-                                }
                             }
                             .outlineCTA()
                         }
@@ -1517,6 +1512,9 @@ struct TrackBookingScreen: View {
                         .padding(18)
                 }
             }
+        }
+        .task {
+            await store.refreshLiveBookings()
         }
     }
 }
@@ -1611,7 +1609,7 @@ struct BookingProgressTimeline: View {
     }
 }
 
-struct MockLiveMapCard: View {
+struct LiveStatusMapCard: View {
     let booking: Booking
 
     var body: some View {
@@ -1646,10 +1644,10 @@ struct AmountApprovalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Amount approval required")
+            Text(title)
                 .font(.system(size: 18, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            Text(booking.amount > 0 ? "Partner shared the final amount after inspection." : "Waiting for the partner to enter the final amount after service inspection.")
+            Text(message)
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
             HStack {
@@ -1657,8 +1655,8 @@ struct AmountApprovalCard: View {
                     .font(.system(size: booking.amount > 0 ? 26 : 20, weight: .black))
                     .foregroundStyle(booking.amount > 0 ? AppTheme.booking : AppTheme.muted)
                 Spacer()
-                if booking.amount > 0 {
-                    Button("Approve") {
+                if booking.canSubmitDirectPayment {
+                    Button("Paid to Partner") {
                         store.approveAmount()
                     }
                     .font(.system(size: 13, weight: .black))
@@ -1670,6 +1668,21 @@ struct AmountApprovalCard: View {
             }
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)
+    }
+
+    private var title: String {
+        if booking.isPaymentSubmitted { return "Waiting for verification" }
+        return booking.amount > 0 ? "Pay partner" : "Final amount pending"
+    }
+
+    private var message: String {
+        if booking.isPaymentSubmitted {
+            return "Your payment confirmation has been sent. The partner will verify the payment and complete the booking."
+        }
+        if booking.amount > 0 {
+            return "Partner shared the final amount after inspection. Pay the partner directly, then mark it paid here."
+        }
+        return "Waiting for the partner to enter the final amount after service inspection."
     }
 }
 
@@ -1696,6 +1709,9 @@ struct BookingsListScreen: View {
                 .padding(18)
                 .padding(.bottom, 114)
             }
+        }
+        .task {
+            await store.refreshLiveBookings()
         }
     }
 

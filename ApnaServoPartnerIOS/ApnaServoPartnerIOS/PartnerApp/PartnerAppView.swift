@@ -494,7 +494,7 @@ struct PersonalInfoScreen: View {
                         Label("Connected to the same ApnaServo backend used by Android.", systemImage: "checkmark.seal.fill")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppTheme.success)
-                        Text("No manual token entry is required in this build. Firebase authentication is used when available, with secure device-scoped headers as fallback.")
+                        Text("No manual token entry is required. Release builds use backend authentication; debug builds can use device-scoped headers only when the backend allows development fallback.")
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                     }

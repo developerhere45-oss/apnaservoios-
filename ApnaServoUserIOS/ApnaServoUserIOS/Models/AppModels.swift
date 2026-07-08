@@ -148,7 +148,15 @@ struct Booking: Identifiable, Codable, Hashable {
     }
 
     var isAmountApprovalPending: Bool {
-        status == "amount_pending" || quoteStatus == "pending_customer"
+        status == "amount_pending"
+    }
+
+    var isPaymentSubmitted: Bool {
+        quoteStatus == "payment_submitted"
+    }
+
+    var canSubmitDirectPayment: Bool {
+        status == "amount_pending" && amount > 0 && ["pending", "none", ""].contains(quoteStatus)
     }
 
     var statusTitle: String {
@@ -158,7 +166,7 @@ struct Booking: Identifiable, Codable, Hashable {
         case "on_the_way": return "Partner On The Way"
         case "arrived": return "Partner Arrived"
         case "started": return "Service Started"
-        case "amount_pending": return "Approve Amount"
+        case "amount_pending": return isPaymentSubmitted ? "Payment Verification" : "Pay Partner"
         case "completed": return "Completed"
         case "cancelled": return "Cancelled"
         case "rejected": return "Rejected"
@@ -237,7 +245,7 @@ struct Booking: Identifiable, Codable, Hashable {
         customerName = c.string("customerName", "userName", "name", fallback: "Customer")
         userPhone = c.string("userPhone", "phone")
         defaultAmount = c.int("defaultAmount", "price")
-        finalAmount = c.int("finalAmount")
+        finalAmount = c.int("finalAmount", "quoteAmount")
         quoteStatus = c.string("quoteStatus", fallback: "none")
         quoteCounterAmount = c.int("quoteCounterAmount")
         quoteCounterMessage = c.string("quoteCounterMessage")
