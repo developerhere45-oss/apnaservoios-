@@ -405,10 +405,7 @@ struct HomeHero: View {
                 VStack(spacing: 12) {
                     HStack {
                         AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
-                            .frame(width: 34, height: 34)
-                            .padding(4)
-                            .background(Color.white.opacity(0.72), in: Circle())
-                            .clipShape(Circle())
+                            .frame(width: 42, height: 42)
 
                         Spacer(minLength: 8)
 
@@ -421,16 +418,14 @@ struct HomeHero: View {
                             store.navigate(.notifications)
                         } label: {
                             AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
-                                .frame(width: 34, height: 34)
-                                .padding(4)
-                                .background(.white.opacity(0.86), in: Circle())
-                                .clipShape(Circle())
+                                .frame(width: 42, height: 42)
                                 .overlay(alignment: .topTrailing) {
                                     if store.notifications.contains(where: { !$0.isRead }) {
                                         Circle().fill(AppTheme.booking).frame(width: 9, height: 9)
                                     }
                                 }
                         }
+                        .contentShape(Circle())
                     }
 
                     Text("Home services at your doorstep")
@@ -472,16 +467,16 @@ struct HomeHero: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text(currentSlide.eyebrow)
-                            .font(.system(size: 13, weight: .black))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppTheme.rose)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(currentSlide.title)
-                                .font(.system(size: 33, weight: .black))
-                                .foregroundStyle(AppTheme.ink.opacity(0.86))
+                                .font(.system(size: 33, weight: .bold))
+                                .foregroundStyle(AppTheme.ink.opacity(0.82))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.72)
                             Text(currentSlide.line)
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppTheme.ink.opacity(0.68))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.78)
@@ -492,9 +487,9 @@ struct HomeHero: View {
                             HStack(spacing: 8) {
                                 Text("Book Slot")
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 11, weight: .black))
+                                    .font(.system(size: 11, weight: .bold))
                             }
-                            .font(.system(size: 15, weight: .black))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 126, height: 48)
                             .background(Color(hex: 0x11141A), in: Capsule())
@@ -544,8 +539,8 @@ struct QuickServiceStrip: View {
                     VStack(spacing: 8) {
                         ServiceLogo(service: service, size: 52)
                         Text(quickTitle(for: service))
-                            .font(.system(size: 10.5, weight: .black))
-                            .foregroundStyle(AppTheme.ink)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(AppTheme.ink.opacity(0.88))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .minimumScaleFactor(0.78)
@@ -598,13 +593,13 @@ struct CommercialHomeCard: View {
                     VStack(alignment: .leading, spacing: 9) {
                         HStack(spacing: 10) {
                             Image(systemName: "building.2.fill")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(AppTheme.bookingDark)
                                 .frame(width: 42, height: 42)
                                 .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
                             Text("COMMERCIAL\nSERVICES")
-                                .font(.system(size: 23, weight: .black))
-                                .foregroundStyle(AppTheme.bookingDark.opacity(0.88))
+                                .font(.system(size: 23, weight: .bold))
+                                .foregroundStyle(AppTheme.bookingDark.opacity(0.78))
                                 .lineSpacing(-2)
                                 .minimumScaleFactor(0.85)
                         }
@@ -617,10 +612,10 @@ struct CommercialHomeCard: View {
                             Label("Professional team", systemImage: "checkmark")
                             Label("On-time service", systemImage: "clock.fill")
                         }
-                        .font(.system(size: 9.5, weight: .black))
+                        .font(.system(size: 9.5, weight: .semibold))
                         .foregroundStyle(AppTheme.bookingDark.opacity(0.72))
                         Text("Business Enquiry")
-                            .font(.system(size: 13.5, weight: .black))
+                            .font(.system(size: 13.5, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 148, height: 40)
                             .background(
@@ -652,13 +647,13 @@ struct ServiceGridSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
-                    .font(.system(size: 24, weight: .black))
-                    .foregroundStyle(AppTheme.ink)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(AppTheme.ink.opacity(0.9))
                 Spacer()
                 Button("View all") {
                     store.showAllServices()
                 }
-                .font(.system(size: 14, weight: .black))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppTheme.rose)
             }
             LazyVGrid(
@@ -694,14 +689,14 @@ struct HomeServiceCard: View {
                 }
                 .frame(height: 78)
                 Text(service.name)
-                    .font(.system(size: 12, weight: .black))
-                    .foregroundStyle(AppTheme.ink)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink.opacity(0.88))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .frame(height: 34)
                     .frame(maxWidth: .infinity)
                 Text("Book")
-                    .font(.system(size: 13, weight: .black))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 76, height: 34)
                     .background(AppTheme.rose, in: Capsule())
@@ -732,8 +727,8 @@ struct WhyChooseCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Why choose us?")
-                .font(.system(size: 24, weight: .black))
-                .foregroundStyle(AppTheme.ink)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(AppTheme.ink.opacity(0.9))
             HStack(spacing: 0) {
                 feature("checkmark", "Verified\nExperts", AppTheme.green)
                 divider
@@ -756,12 +751,12 @@ struct WhyChooseCard: View {
     private func feature(_ icon: String, _ title: String, _ color: Color) -> some View {
         VStack(spacing: 9) {
             Image(systemName: icon)
-                .font(.system(size: 24, weight: .black))
+                .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(color)
                 .frame(height: 30)
             Text(title)
-                .font(.system(size: 12, weight: .black))
-                .foregroundStyle(AppTheme.ink)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.ink.opacity(0.86))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
@@ -1909,14 +1904,14 @@ struct ProfileScreen: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Text(profileInitial)
-                    .font(.system(size: 28, weight: .black))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 72, height: 72)
                     .background(AppTheme.booking, in: Circle())
                 VStack(alignment: .leading, spacing: 5) {
                     Text(store.profile.name.isEmpty ? "ApnaServo Customer" : store.profile.name)
-                        .font(.system(size: 21, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(AppTheme.ink.opacity(0.9))
                     Text(store.profile.phone.isEmpty ? "Phone not shared" : store.profile.phone)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.muted)
@@ -1939,8 +1934,8 @@ struct ProfileScreen: View {
                     .background(AppTheme.bookingSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink.opacity(0.88))
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
@@ -1971,8 +1966,8 @@ struct SavedAddressPanel: View {
                     .background(AppTheme.bookingSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Saved Addresses")
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink.opacity(0.88))
                     Text("\(store.savedAddresses.count)/3 addresses saved")
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
@@ -1984,8 +1979,8 @@ struct SavedAddressPanel: View {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(address.title)
-                            .font(.system(size: 13, weight: .black))
-                            .foregroundStyle(AppTheme.ink)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppTheme.ink.opacity(0.88))
                         Text(address.detail)
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.muted)
@@ -2045,7 +2040,7 @@ struct SavedAddressPanel: View {
                 } label: {
                     Label("Add New Address", systemImage: "plus.circle.fill")
                 }
-                .font(.system(size: 13, weight: .black))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(store.savedAddresses.count >= 3 ? AppTheme.muted : AppTheme.booking)
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
