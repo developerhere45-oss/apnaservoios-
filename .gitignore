@@ -1,0 +1,19 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# App signing and local Firebase config
+*.mobileprovision
+*.p8
+GoogleService-Info.plist
+
+# macOS
+.DS_Store
