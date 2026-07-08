@@ -130,7 +130,10 @@ final class APIClient {
             token: token,
             body: ["status": status, "finalAmount": finalAmount]
         )
-        return envelope.booking ?? try await getBooking(bookingId, token: token)
+        if let booking = envelope.booking {
+            return booking
+        }
+        return try await getBooking(bookingId, token: token)
     }
 
     func counterOfferQuote(_ bookingId: String, amount: Int, message: String, token: String) async throws -> Booking {
@@ -140,7 +143,10 @@ final class APIClient {
             token: token,
             body: ["amount": amount, "message": message]
         )
-        return envelope.booking ?? try await getBooking(bookingId, token: token)
+        if let booking = envelope.booking {
+            return booking
+        }
+        return try await getBooking(bookingId, token: token)
     }
 
     func submitReview(bookingId: String, rating: Int, comment: String, token: String) async throws {
@@ -209,7 +215,10 @@ final class APIClient {
                 lastError = error
             }
         }
-        throw lastError ?? APIError.badResponse("Backend not reachable.")
+        if let lastError = lastError {
+            throw lastError
+        }
+        throw APIError.badResponse("Backend not reachable.")
     }
 
     private func execute<T: Decodable>(

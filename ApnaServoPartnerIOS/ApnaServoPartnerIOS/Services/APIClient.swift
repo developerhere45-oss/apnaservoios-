@@ -217,7 +217,10 @@ final class APIClient {
                 lastError = error
             }
         }
-        throw lastError ?? APIError.badResponse("Backend not reachable.")
+        if let lastError = lastError {
+            throw lastError
+        }
+        throw APIError.badResponse("Backend not reachable.")
     }
 
     private func execute<T: Decodable>(baseURL: URL, path: String, method: String, token: String, body: [String: Any]?) async throws -> T {
