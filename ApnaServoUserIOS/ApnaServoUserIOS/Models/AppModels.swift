@@ -102,6 +102,12 @@ struct UserProfile: Codable, Hashable {
     }
 }
 
+struct SavedAddress: Identifiable, Codable, Hashable {
+    var id: String = UUID().uuidString
+    var title: String
+    var detail: String
+}
+
 struct BookingDraft: Hashable {
     var problem = ""
     var address = ""

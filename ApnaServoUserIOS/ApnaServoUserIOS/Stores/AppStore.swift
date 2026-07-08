@@ -41,6 +41,10 @@ final class UserAppStore: ObservableObject {
         ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
     ]
     @Published var notifications: [AppNotificationItem] = []
+    @Published var savedAddresses: [SavedAddress] = [
+        SavedAddress(title: "Home", detail: "House 12, Ganeshguri, Guwahati, Assam 781006"),
+        SavedAddress(title: "Work", detail: "Dispur, Guwahati, Assam")
+    ]
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
     @Published var loginMode = "Phone"
@@ -183,12 +187,28 @@ final class UserAppStore: ObservableObject {
 
     func chooseDate(_ value: String) {
         draft.date = value
+        if !draft.time.isEmpty && !isTimeSlotAvailable(draft.time) {
+            draft.time = ""
+            toastMessage = "Past time slots are closed for today."
+        }
         showDateSheet = false
     }
 
     func chooseTime(_ value: String) {
+        guard isTimeSlotAvailable(value) else {
+            toastMessage = "This time slot is no longer available."
+            return
+        }
         draft.time = value
         showTimeSheet = false
+    }
+
+    func isTimeSlotAvailable(_ slot: String) -> Bool {
+        guard draft.date.hasPrefix("Today") else { return true }
+        guard let slotStart = Self.slotStartMinutes(slot) else { return true }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let nowMinutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)
+        return slotStart > nowMinutes
     }
 
     func continueToConfirm() {
@@ -349,6 +369,37 @@ final class UserAppStore: ObservableObject {
         screen = .login
     }
 
+    func addSavedAddressFromCurrentProfile() {
+        addSavedAddress(title: savedAddresses.isEmpty ? "Home" : "Address \(savedAddresses.count + 1)", detail: currentAddressForSaving())
+    }
+
+    func addSavedAddress(title: String, detail: String) {
+        guard savedAddresses.count < 3 else {
+            toastMessage = "You can save up to 3 addresses."
+            return
+        }
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanDetail.count >= 8 else {
+            toastMessage = "Add a complete address before saving."
+            return
+        }
+        savedAddresses.append(SavedAddress(title: cleanTitle.isEmpty ? "Address \(savedAddresses.count + 1)" : cleanTitle, detail: cleanDetail))
+        toastMessage = "Address saved."
+    }
+
+    func deleteSavedAddress(_ address: SavedAddress) {
+        savedAddresses.removeAll { $0.id == address.id }
+        toastMessage = "Address deleted."
+    }
+
+    func useSavedAddress(_ address: SavedAddress) {
+        addressMode = .manual
+        draft.address = address.detail
+        draft.hasLocation = true
+        toastMessage = "\(address.title) selected."
+    }
+
     func bookingAddressPreview() -> String {
         if addressMode == .current {
             let parts = [houseFlat, building, floor, room, landmark, draft.address]
@@ -360,6 +411,17 @@ final class UserAppStore: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         return parts.joined(separator: ", ")
+    }
+
+    private func currentAddressForSaving() -> String {
+        let draftAddress = bookingAddressPreview()
+        if draftAddress.count >= 8 && !draftAddress.lowercased().contains("location will") {
+            return draftAddress
+        }
+        if !profile.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return profile.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "Guwahati, Assam"
     }
 
     func startLiveBookingSync() {
@@ -434,7 +496,7 @@ final class UserAppStore: ObservableObject {
             try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: authToken)
         } catch {
             await MainActor.run {
-                toastMessage = "Profile will sync when backend is reachable."
+                toastMessage = "Profile will sync when connection is restored."
             }
         }
     }
@@ -476,7 +538,6 @@ final class UserAppStore: ObservableObject {
                 } else {
                     upsertBooking(liveBooking)
                 }
-                toastMessage = "Booking sent to live backend."
             }
             await refreshLiveBookings()
         } catch {
@@ -503,5 +564,15 @@ final class UserAppStore: ObservableObject {
             return "You can update address before confirming the booking. Support can help after confirmation."
         }
         return "Request recorded. Our support team will follow up from your booking details."
+    }
+
+    private static func slotStartMinutes(_ slot: String) -> Int? {
+        let startText = slot.components(separatedBy: " - ").first ?? slot
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "hh:mm a"
+        guard let date = formatter.date(from: startText) else { return nil }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
     }
 }

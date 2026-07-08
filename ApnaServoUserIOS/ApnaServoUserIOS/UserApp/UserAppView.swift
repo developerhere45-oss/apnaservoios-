@@ -39,7 +39,7 @@ struct UserAppView: View {
     private var showsFloatingFooter: Bool {
         guard store.latestBooking != nil else { return false }
         switch store.screen {
-        case .home, .services, .detail, .bookings, .profile, .notifications, .commercial:
+        case .bookings:
             return true
         default:
             return false
@@ -347,9 +347,6 @@ struct HomeScreen: View {
                     QuickServiceStrip()
                     CommercialHomeCard()
                     ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
-                    if !store.bookings.isEmpty {
-                        RecentBookingSection()
-                    }
                     ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
                     WhyChooseCard()
                 }
@@ -407,14 +404,11 @@ struct HomeHero: View {
 
                 VStack(spacing: 12) {
                     HStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.65))
+                        AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
                             .frame(width: 34, height: 34)
-                            .overlay(
-                                Image(systemName: "shield.checkered")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(AppTheme.booking)
-                            )
+                            .padding(4)
+                            .background(Color.white.opacity(0.72), in: Circle())
+                            .clipShape(Circle())
 
                         Spacer(minLength: 8)
 
@@ -426,11 +420,11 @@ struct HomeHero: View {
                         Button {
                             store.navigate(.notifications)
                         } label: {
-                            Image(systemName: "bell.fill")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppTheme.booking)
+                            AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
                                 .frame(width: 34, height: 34)
-                                .background(.white, in: Circle())
+                                .padding(4)
+                                .background(.white.opacity(0.86), in: Circle())
+                                .clipShape(Circle())
                                 .overlay(alignment: .topTrailing) {
                                     if store.notifications.contains(where: { !$0.isRead }) {
                                         Circle().fill(AppTheme.booking).frame(width: 9, height: 9)
@@ -624,7 +618,7 @@ struct CommercialHomeCard: View {
                             Label("On-time service", systemImage: "clock.fill")
                         }
                         .font(.system(size: 9.5, weight: .black))
-                        .foregroundStyle(AppTheme.bookingDark)
+                        .foregroundStyle(AppTheme.bookingDark.opacity(0.72))
                         Text("Business Enquiry")
                             .font(.system(size: 13.5, weight: .black))
                             .foregroundStyle(.white)
@@ -1883,9 +1877,7 @@ struct ProfileScreen: View {
                     profileAction("My Bookings", "Track active and past bookings", "list.bullet.rectangle.fill") {
                         store.navigate(.bookings)
                     }
-                    profileAction("Saved Addresses", "Home and service locations", "house.fill") {
-                        store.toastMessage = store.profile.address.isEmpty ? "No saved address yet." : store.profile.address
-                    }
+                    SavedAddressPanel()
                     profileAction("Payments", "No upfront payment enabled", "creditcard.fill") {
                         store.paymentInfoExpanded.toggle()
                     }
@@ -1901,16 +1893,6 @@ struct ProfileScreen: View {
                     }
                     profileAction("Legal & Account", "Privacy, terms and deletion", "shield.fill") {
                         store.showLegalSheet = true
-                    }
-                    profileAction("About ApnaServo", "Trusted home repair services", "info.circle.fill") {
-                        store.aboutInfoExpanded.toggle()
-                    }
-                    if store.aboutInfoExpanded {
-                        Text("ApnaServo connects customers with verified partners using the same live backend as the Android app.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .androidCard(padding: 12, radius: 14)
                     }
                     Button("Logout") {
                         store.logout()
@@ -1938,15 +1920,7 @@ struct ProfileScreen: View {
                     Text(store.profile.phone.isEmpty ? "Phone not shared" : store.profile.phone)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.muted)
-                    Text("Bookings, addresses and support in one place")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.muted)
                 }
-            }
-            HStack(spacing: 10) {
-                profileStat("Bookings", "\(store.bookings.count)")
-                profileStat("Active", "\(store.activeBookings.count)")
-                profileStat("City", AppConfig.defaultCity)
             }
         }
         .androidCard(padding: 16, radius: 22, border: AppTheme.roseSoft, shadow: 4)
@@ -1954,20 +1928,6 @@ struct ProfileScreen: View {
 
     private var profileInitial: String {
         String((store.profile.name.isEmpty ? "A" : store.profile.name).prefix(1)).uppercased()
-    }
-
-    private func profileStat(_ title: String, _ value: String) -> some View {
-        VStack(spacing: 3) {
-            Text(value)
-                .font(.system(size: 14, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(AppTheme.muted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private func profileAction(_ title: String, _ subtitle: String, _ icon: String, action: @escaping () -> Void) -> some View {
@@ -1993,6 +1953,118 @@ struct ProfileScreen: View {
             .androidCard(padding: 14, radius: 17, shadow: 1)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct SavedAddressPanel: View {
+    @EnvironmentObject private var store: UserAppStore
+    @State private var isAddingAddress = false
+    @State private var newAddressTitle = ""
+    @State private var newAddressDetail = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "house.fill")
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.bookingSoft, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Saved Addresses")
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundStyle(AppTheme.ink)
+                    Text("\(store.savedAddresses.count)/3 addresses saved")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                Spacer()
+            }
+
+            ForEach(store.savedAddresses) { address in
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(address.title)
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                        Text(address.detail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.muted)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        store.useSavedAddress(address)
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(AppTheme.green)
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        store.deleteSavedAddress(address)
+                    } label: {
+                        Image(systemName: "trash.fill")
+                            .foregroundStyle(AppTheme.booking)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
+            }
+
+            if isAddingAddress {
+                VStack(spacing: 10) {
+                    addressField("Address title", text: $newAddressTitle)
+                    addressField("Full address", text: $newAddressDetail)
+                    HStack(spacing: 10) {
+                        Button("Cancel") {
+                            isAddingAddress = false
+                            newAddressTitle = ""
+                            newAddressDetail = ""
+                        }
+                        .outlineCTA()
+                        Button("Save Address") {
+                            let previousCount = store.savedAddresses.count
+                            store.addSavedAddress(title: newAddressTitle, detail: newAddressDetail)
+                            if store.savedAddresses.count > previousCount {
+                                isAddingAddress = false
+                                newAddressTitle = ""
+                                newAddressDetail = ""
+                            }
+                        }
+                        .roseCTA()
+                    }
+                }
+                .padding(12)
+                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            } else {
+                Button {
+                    newAddressTitle = "Address \(store.savedAddresses.count + 1)"
+                    newAddressDetail = store.profile.address
+                    isAddingAddress = true
+                } label: {
+                    Label("Add New Address", systemImage: "plus.circle.fill")
+                }
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(store.savedAddresses.count >= 3 ? AppTheme.muted : AppTheme.booking)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
+                .disabled(store.savedAddresses.count >= 3)
+            }
+        }
+        .androidCard(padding: 14, radius: 17, shadow: 1)
+    }
+
+    private func addressField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppTheme.ink)
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.line, lineWidth: 1))
     }
 }
 
@@ -2122,7 +2194,7 @@ struct CommercialFormTwoScreen: View {
             FormField("Site Address", text: $address)
             FormField("Work Scope", text: $scope)
             FormField("Preferred Inspection Time", text: $preferredTime)
-            InfoNote(text: "Inspection details will be synced with the ApnaServo backend when submitted.")
+            InfoNote(text: "Inspection details will be saved when submitted.")
             Button("Submit Request") {
                 store.navigate(.commercialSubmitted)
             }

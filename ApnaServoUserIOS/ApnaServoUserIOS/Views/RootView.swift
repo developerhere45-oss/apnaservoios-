@@ -180,23 +180,28 @@ struct TimeChoiceSheet: View {
             }
 
             ForEach(slots, id: \.self) { slot in
+                let unavailable = !store.isTimeSlotAvailable(slot)
                 Button {
-                    store.chooseTime(slot)
+                    if !unavailable {
+                        store.chooseTime(slot)
+                    }
                 } label: {
                     HStack {
                         Text(slot)
                             .font(.system(size: 15, weight: .semibold))
                         Spacer()
-                        Text(slot == "10:00 AM - 12:00 PM" ? "Recommended" : "Available")
+                        Text(unavailable ? "Closed" : (slot == "10:00 AM - 12:00 PM" ? "Recommended" : "Available"))
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(slot == "10:00 AM - 12:00 PM" ? AppTheme.green : AppTheme.muted)
-                        Image(systemName: store.draft.time == slot ? "largecircle.fill.circle" : "circle")
-                            .foregroundStyle(store.draft.time == slot ? AppTheme.booking : AppTheme.muted)
+                            .foregroundStyle(unavailable ? AppTheme.muted.opacity(0.7) : (slot == "10:00 AM - 12:00 PM" ? AppTheme.green : AppTheme.muted))
+                        Image(systemName: unavailable ? "lock.fill" : (store.draft.time == slot ? "largecircle.fill.circle" : "circle"))
+                            .foregroundStyle(unavailable ? AppTheme.muted.opacity(0.6) : (store.draft.time == slot ? AppTheme.booking : AppTheme.muted))
                     }
-                    .foregroundStyle(AppTheme.ink)
+                    .foregroundStyle(unavailable ? AppTheme.muted : AppTheme.ink)
+                    .opacity(unavailable ? 0.58 : 1)
                     .androidCard(padding: 14, radius: 12, border: store.draft.time == slot ? AppTheme.booking : AppTheme.line)
                 }
                 .buttonStyle(.plain)
+                .disabled(unavailable)
             }
         }
         .padding(18)
