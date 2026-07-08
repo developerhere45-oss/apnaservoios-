@@ -61,7 +61,7 @@ struct ServiceItem: Identifiable, Hashable, Codable {
     let rating: String
 
     var priceLabel: String {
-        price > 0 ? "Rs \(price)" : "Quote"
+        "After inspection"
     }
 }
 
@@ -69,18 +69,18 @@ enum ServiceCatalog {
     static let categories = ["Home Repair", "Roadside Help", "Cleaning & Care", "Appliances", "Others"]
 
     static let services: [ServiceItem] = [
-        ServiceItem(id: "ac", shortCode: "AC", name: "AC Repair & Service", category: "Home Repair", description: "AC inspection, cleaning, gas refilling, performance check, and repair replacement.", price: 499, arrival: "Same day", rating: "4.7"),
-        ServiceItem(id: "electrician", shortCode: "EL", name: "Electrician", category: "Home Repair", description: "Switchboard, wiring, fan, MCB, socket, inverter, and urgent electrical repair.", price: 299, arrival: "45 min", rating: "4.8"),
-        ServiceItem(id: "plumbing", shortCode: "PL", name: "Plumber", category: "Home Repair", description: "Tap, sink, flush tank, blocked drain, water motor, leakage, and pipe repair.", price: 299, arrival: "45 min", rating: "4.7"),
-        ServiceItem(id: "carpenter", shortCode: "CR", name: "Carpenter", category: "Home Repair", description: "Door, lock, curtain rod, furniture assembly, wall shelf, and cabinet fixes.", price: 299, arrival: "Same day", rating: "4.8"),
-        ServiceItem(id: "painting", shortCode: "PT", name: "Painting", category: "Home Repair", description: "Wall painting, touch-ups, damp patch repair, rental move-out paint, and finish work.", price: 399, arrival: "Scheduled", rating: "4.6"),
+        ServiceItem(id: "ac", shortCode: "AC", name: "AC Repair & Service", category: "Home Repair", description: "AC inspection, cleaning, gas refilling, performance check, and repair replacement.", price: 0, arrival: "Same day", rating: "4.7"),
+        ServiceItem(id: "electrician", shortCode: "EL", name: "Electrician", category: "Home Repair", description: "Switchboard, wiring, fan, MCB, socket, inverter, and urgent electrical repair.", price: 0, arrival: "45 min", rating: "4.8"),
+        ServiceItem(id: "plumbing", shortCode: "PL", name: "Plumber", category: "Home Repair", description: "Tap, sink, flush tank, blocked drain, water motor, leakage, and pipe repair.", price: 0, arrival: "45 min", rating: "4.7"),
+        ServiceItem(id: "carpenter", shortCode: "CR", name: "Carpenter", category: "Home Repair", description: "Door, lock, curtain rod, furniture assembly, wall shelf, and cabinet fixes.", price: 0, arrival: "Same day", rating: "4.8"),
+        ServiceItem(id: "painting", shortCode: "PT", name: "Painting", category: "Home Repair", description: "Wall painting, touch-ups, damp patch repair, rental move-out paint, and finish work.", price: 0, arrival: "Scheduled", rating: "4.6"),
         ServiceItem(id: "interior", shortCode: "IN", name: "Interior Design", category: "Others", description: "Consultation for room planning, furniture placement, lighting, and home styling.", price: 0, arrival: "Consultation", rating: "4.9"),
         ServiceItem(id: "roadside", shortCode: "RS", name: "Roadside Assistance", category: "Roadside Help", description: "Emergency roadside help, jump-start support, towing coordination, and tyre help.", price: 0, arrival: "24/7", rating: "4.6"),
-        ServiceItem(id: "cleaning", shortCode: "CL", name: "Cleaning Services", category: "Cleaning & Care", description: "Home and office cleaning, bathroom cleaning, sofa cleaning, and deep cleaning.", price: 599, arrival: "Scheduled", rating: "4.7"),
-        ServiceItem(id: "laundry", shortCode: "LD", name: "Laundry", category: "Cleaning & Care", description: "Clothes washing, ironing, dry cleaning pickup, stain care, and doorstep laundry service.", price: 199, arrival: "Scheduled", rating: "4.6"),
-        ServiceItem(id: "pest", shortCode: "PC", name: "Pest Control", category: "Cleaning & Care", description: "Safe pest treatment for home, kitchen, bathroom, and office spaces.", price: 499, arrival: "Safe", rating: "4.6"),
-        ServiceItem(id: "appliances", shortCode: "AP", name: "Appliances", category: "Appliances", description: "Washing machine, refrigerator, microwave, RO, chimney, and geyser inspection.", price: 399, arrival: "Same day", rating: "4.7"),
-        ServiceItem(id: "ro", shortCode: "RO", name: "RO Service", category: "Appliances", description: "RO water purifier inspection, filter change, leakage repair, servicing, and installation.", price: 299, arrival: "Same day", rating: "4.7")
+        ServiceItem(id: "cleaning", shortCode: "CL", name: "Cleaning Services", category: "Cleaning & Care", description: "Home and office cleaning, bathroom cleaning, sofa cleaning, and deep cleaning.", price: 0, arrival: "Scheduled", rating: "4.7"),
+        ServiceItem(id: "laundry", shortCode: "LD", name: "Laundry", category: "Cleaning & Care", description: "Clothes washing, ironing, dry cleaning pickup, stain care, and doorstep laundry service.", price: 0, arrival: "Scheduled", rating: "4.6"),
+        ServiceItem(id: "pest", shortCode: "PC", name: "Pest Control", category: "Cleaning & Care", description: "Safe pest treatment for home, kitchen, bathroom, and office spaces.", price: 0, arrival: "Safe", rating: "4.6"),
+        ServiceItem(id: "appliances", shortCode: "AP", name: "Appliances", category: "Appliances", description: "Washing machine, refrigerator, microwave, RO, chimney, and geyser inspection.", price: 0, arrival: "Same day", rating: "4.7"),
+        ServiceItem(id: "ro", shortCode: "RO", name: "RO Service", category: "Appliances", description: "RO water purifier inspection, filter change, leakage repair, servicing, and installation.", price: 0, arrival: "Same day", rating: "4.7")
     ]
 
     static func service(id: String) -> ServiceItem {

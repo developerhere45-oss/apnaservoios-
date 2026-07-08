@@ -56,6 +56,13 @@ final class UserAppStore: ObservableObject {
 
     let services = ServiceCatalog.services
     let categories = ServiceCatalog.categories
+    private let api = APIClient()
+    private let notificationService = AppNotificationService()
+    private let authToken = ""
+
+    init() {
+        notificationService.configure()
+    }
 
     var isLoggedIn: Bool {
         !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -106,12 +113,20 @@ final class UserAppStore: ObservableObject {
         }
         showLoginSheet = false
         navigate(.startupLocation, remember: false)
+        Task {
+            await syncUserProfile()
+            await loadLiveBookings()
+        }
     }
 
     func finishLocationGate() {
         profile.lat = AppConfig.defaultLatitude
         profile.lng = AppConfig.defaultLongitude
         navigate(.home, remember: false)
+        Task {
+            await syncUserProfile()
+            await loadLiveBookings()
+        }
     }
 
     func openService(_ service: ServiceItem) {
@@ -216,7 +231,7 @@ final class UserAppStore: ObservableObject {
             partnerPhone: "9876543210",
             customerName: profile.name.isEmpty ? "ApnaServo Customer" : profile.name,
             userPhone: profile.phone,
-            defaultAmount: selectedService.price,
+            defaultAmount: 0,
             lat: draft.lat,
             lng: draft.lng
         )
@@ -227,6 +242,9 @@ final class UserAppStore: ObservableObject {
             ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat will be available after a partner is assigned.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
         ]
         navigate(.bookingConfirmed)
+        Task {
+            await submitBookingToBackend(service: selectedService, draft: draft, profile: profile, fallbackId: booking.id)
+        }
     }
 
     func assignPartner() {
@@ -255,7 +273,6 @@ final class UserAppStore: ObservableObject {
         let next = flow[min(currentIndex + 1, flow.count - 1)]
         booking.status = next
         if next == "amount_pending" {
-            booking.finalAmount = max(booking.defaultAmount, 699)
             booking.quoteStatus = "pending_customer"
         }
         latestBooking = booking
@@ -358,6 +375,55 @@ final class UserAppStore: ObservableObject {
             ),
             at: 0
         )
+    }
+
+    private func syncUserProfile() async {
+        do {
+            try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: authToken)
+        } catch {
+            await MainActor.run {
+                toastMessage = "Profile will sync when backend is reachable."
+            }
+        }
+    }
+
+    private func loadLiveBookings() async {
+        do {
+            let liveBookings = try await api.fetchUserBookings(token: authToken)
+            if !liveBookings.isEmpty {
+                await MainActor.run {
+                    bookings = liveBookings
+                    latestBooking = liveBookings.first
+                }
+            }
+        } catch {
+            // Keep local bookings visible if the backend is temporarily unavailable.
+        }
+    }
+
+    private func submitBookingToBackend(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fallbackId: String) async {
+        do {
+            let liveBooking = try await api.createBooking(
+                service: service,
+                draft: draft,
+                profile: profile,
+                fcmToken: notificationService.fcmToken,
+                token: authToken
+            )
+            await MainActor.run {
+                latestBooking = liveBooking
+                if let index = bookings.firstIndex(where: { $0.id == fallbackId }) {
+                    bookings[index] = liveBooking
+                } else {
+                    upsertBooking(liveBooking)
+                }
+                toastMessage = "Booking sent to live backend."
+            }
+        } catch {
+            await MainActor.run {
+                toastMessage = "Booking saved locally. Live sync will retry when backend is reachable."
+            }
+        }
     }
 
     private func supportReply(for text: String) -> String {

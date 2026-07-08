@@ -83,7 +83,7 @@ final class PartnerAppStore: ObservableObject {
 
     func completeLogin() {
         guard profile.isValid else {
-            errorMessage = "Name, 10 digit phone, aur at least one service required hai."
+            errorMessage = "Enter your name, a valid 10-digit phone number, and at least one service."
             return
         }
         persistProfile()
@@ -111,7 +111,7 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func syncPartnerProfile() async {
-        guard profile.isValid, !authToken.isEmpty else { return }
+        guard profile.isValid else { return }
         do {
             try await api.upsertPartnerProfile(profile, fcmToken: fcmToken, token: authToken)
         } catch {
@@ -120,7 +120,6 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func fetchRemoteProfile() async {
-        guard !authToken.isEmpty else { return }
         do {
             profile = try await api.fetchPartnerProfile(current: profile, token: authToken)
             persistProfile()
@@ -148,7 +147,6 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func fetchBookings() async {
-        guard !authToken.isEmpty else { return }
         do {
             let live = try await api.fetchPartnerBookings(token: authToken)
             mergeBookings(live)
@@ -158,7 +156,6 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func fetchNotifications() async {
-        guard !authToken.isEmpty else { return }
         do {
             notifications = try await api.fetchNotifications(token: authToken)
         } catch {
@@ -276,7 +273,7 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func loadBookingChat() async {
-        guard let booking = selectedBooking, !authToken.isEmpty else { return }
+        guard let booking = selectedBooking else { return }
         do {
             messages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: authToken)
             await api.markBookingChatSeen(bookingId: booking.id, token: authToken)
@@ -368,7 +365,7 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func sendLocationHeartbeat() async {
-        guard profile.online, !authToken.isEmpty else { return }
+        guard profile.online else { return }
         let payload = await makeLocationPayload(bookingId: activeBookings.first?.id ?? "")
         do {
             try await api.updateLocation(payload, token: authToken)
@@ -424,7 +421,7 @@ final class PartnerAppStore: ObservableObject {
     private func supportReply(for text: String) -> String {
         let lower = text.lowercased()
         if lower.contains("payment") || lower.contains("earning") {
-            return "Earnings completed jobs se calculate hoti hai. Statement date filter se PDF download kar sakte ho."
+            return "Earnings are calculated from completed jobs. Use the statement date filter to download a PDF."
         }
         if lower.contains("radius") || lower.contains("area") || lower.contains("location") {
             return "Update service area and radius in My Services, then save. Location heartbeat is sent while Online mode is on."

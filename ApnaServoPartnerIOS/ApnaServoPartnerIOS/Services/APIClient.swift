@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import Security
+import UIKit
 import UserNotifications
 
 #if canImport(FirebaseMessaging)
@@ -14,7 +15,7 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingToken: return "Firebase ID token missing. Add Firebase iOS Auth or paste a temporary token in Profile."
+        case .missingToken: return "Authentication token missing."
         case .invalidURL: return "Backend URL invalid."
         case .badResponse(let message): return message
         }
@@ -162,7 +163,7 @@ final class APIClient {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: try makeURL(baseURL: activeBaseURL, path: "/partners/documents"))
         request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        applyAuthHeaders(to: &request, token: token)
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = try multipartBody(boundary: boundary, documentType: documentType, fileURL: fileURL, aadhaarLast4: aadhaarLast4)
         let (data, response) = try await session.data(for: request)
@@ -205,7 +206,6 @@ final class APIClient {
     }
 
     private func request<T: Decodable>(path: String, method: String = "GET", token: String, body: [String: Any]? = nil) async throws -> T {
-        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw APIError.missingToken }
         var lastError: Error?
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
         for baseURL in ordered {
@@ -227,7 +227,7 @@ final class APIClient {
         var request = URLRequest(url: try makeURL(baseURL: baseURL, path: path))
         request.httpMethod = method
         request.timeoutInterval = 14
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        applyAuthHeaders(to: &request, token: token)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -244,10 +244,9 @@ final class APIClient {
     }
 
     private func dataRequest(path: String, token: String) async throws -> Data {
-        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw APIError.missingToken }
         var request = URLRequest(url: try makeURL(baseURL: activeBaseURL, path: path))
         request.httpMethod = "GET"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        applyAuthHeaders(to: &request, token: token)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.badResponse("PDF generation failed.")
@@ -269,6 +268,28 @@ final class APIClient {
             return finalURL
         }
         return url
+    }
+
+    private func applyAuthHeaders(to request: inout URLRequest, token: String) {
+        let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanToken.isEmpty {
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+            return
+        }
+        request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
+        request.setValue("partner", forHTTPHeaderField: "x-apnaservo-dev-role")
+    }
+
+    private func deviceAuthUID() -> String {
+        let key = "apnaservo.ios.partner.device.uid"
+        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
+            return existing
+        }
+        let rawId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let cleanId = rawId.replacingOccurrences(of: "-", with: "").lowercased()
+        let uid = "local-partner-ios-\(cleanId)"
+        UserDefaults.standard.set(uid, forKey: key)
+        return uid
     }
 
     private func httpError(code: Int, data: Data) -> String {

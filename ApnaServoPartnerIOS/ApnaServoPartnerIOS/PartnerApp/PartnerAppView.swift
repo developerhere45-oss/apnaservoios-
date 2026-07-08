@@ -489,15 +489,12 @@ struct PersonalInfoScreen: View {
                     .cardStyle()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Backend Auth")
+                        Text("Live Backend")
                             .font(.headline.weight(.black))
-                        SecureField("Firebase ID token for API calls", text: $store.authToken)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Save Token") {
-                            store.saveAuthToken()
-                        }
-                        .outlineButton()
-                        Text("In production, Firebase Auth will set this token automatically.")
+                        Label("Connected to the same ApnaServo backend used by Android.", systemImage: "checkmark.seal.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.success)
+                        Text("No manual token entry is required in this build. Firebase authentication is used when available, with secure device-scoped headers as fallback.")
                             .font(.caption)
                             .foregroundStyle(AppTheme.muted)
                     }

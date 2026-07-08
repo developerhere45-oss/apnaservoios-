@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import Security
+import UIKit
 import UserNotifications
 
 #if canImport(FirebaseMessaging)
@@ -15,7 +16,7 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingToken:
-            return "Firebase ID token missing. Add Firebase iOS Auth or paste a temporary token in Profile."
+            return "Authentication token missing."
         case .invalidURL:
             return "Backend URL invalid."
         case .badResponse(let message):
@@ -73,7 +74,6 @@ final class APIClient {
     }
 
     func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fcmToken: String, token: String) async throws -> Booking {
-        let amount = service.price
         let body: [String: Any] = [
             "serviceCategory": service.id,
             "serviceName": service.name,
@@ -88,8 +88,6 @@ final class APIClient {
             "date": draft.date,
             "time": draft.time,
             "slot": draft.slot,
-            "defaultAmount": amount,
-            "price": amount,
             "userName": profile.name,
             "customerName": profile.name,
             "userPhone": profile.phone,
@@ -109,10 +107,15 @@ final class APIClient {
             slot: draft.slot,
             customerName: profile.name,
             userPhone: profile.phone,
-            defaultAmount: amount,
+            defaultAmount: 0,
             lat: draft.lat,
             lng: draft.lng
         )
+    }
+
+    func fetchUserBookings(token: String) async throws -> [Booking] {
+        let envelope: BookingEnvelope = try await request(path: "/bookings/user", token: token)
+        return envelope.bookings ?? []
     }
 
     func getBooking(_ bookingId: String, token: String) async throws -> Booking {
@@ -200,10 +203,6 @@ final class APIClient {
         token: String,
         body: [String: Any]? = nil
     ) async throws -> T {
-        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw APIError.missingToken
-        }
-
         var lastError: Error?
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
         for baseURL in ordered {
@@ -232,7 +231,7 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 14
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        applyAuthHeaders(to: &request, token: token)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if let body {
@@ -270,6 +269,28 @@ final class APIClient {
             return finalURL
         }
         return url
+    }
+
+    private func applyAuthHeaders(to request: inout URLRequest, token: String) {
+        let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanToken.isEmpty {
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+            return
+        }
+        request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
+        request.setValue("user", forHTTPHeaderField: "x-apnaservo-dev-role")
+    }
+
+    private func deviceAuthUID() -> String {
+        let key = "apnaservo.ios.user.device.uid"
+        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
+            return existing
+        }
+        let rawId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let cleanId = rawId.replacingOccurrences(of: "-", with: "").lowercased()
+        let uid = "local-user-ios-\(cleanId)"
+        UserDefaults.standard.set(uid, forKey: key)
+        return uid
     }
 
     private func httpError(code: Int, data: Data) -> String {

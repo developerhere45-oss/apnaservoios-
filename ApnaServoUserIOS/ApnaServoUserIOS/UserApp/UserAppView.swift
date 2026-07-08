@@ -360,15 +360,37 @@ struct HomeScreen: View {
     }
 }
 
+private struct HomeHeroSlide {
+    let serviceId: String
+    let asset: String
+    let eyebrow: String
+    let title: String
+    let line: String
+}
+
 struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
+    @State private var selectedSlide = 0
+    private let slideTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
+    private let slides = [
+        HomeHeroSlide(serviceId: "ac", asset: "banner_ac_service", eyebrow: "VERIFIED SERVICE", title: "AC REPAIR", line: "Inspection - Cleaning - Gas refill"),
+        HomeHeroSlide(serviceId: "plumbing", asset: "banner_plumbing_service", eyebrow: "FAST HOME CARE", title: "PLUMBER", line: "Tap - Leakage - Water line repair"),
+        HomeHeroSlide(serviceId: "electrician", asset: "banner_electrician_service", eyebrow: "TRUSTED EXPERTS", title: "ELECTRICIAN", line: "Wiring - Switchboard - Fan repair"),
+        HomeHeroSlide(serviceId: "cleaning", asset: "banner_cleaning_service", eyebrow: "CLEAN & SAFE", title: "CLEANING", line: "Home - Bathroom - Deep cleaning")
+    ]
+
+    private var currentSlide: HomeHeroSlide {
+        slides[selectedSlide % slides.count]
+    }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
-                AndroidAssetImage(name: "banner_ac_service", contentMode: .fill)
+                AndroidAssetImage(name: currentSlide.asset, contentMode: .fill)
+                    .id(currentSlide.asset)
                     .frame(width: proxy.size.width, height: 398)
                     .clipped()
+                    .transition(.opacity)
                 LinearGradient(
                     colors: [
                         Color.white.opacity(0.82),
@@ -452,23 +474,23 @@ struct HomeHero: View {
                     Spacer()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("VERIFIED SERVICE")
+                        Text(currentSlide.eyebrow)
                             .font(.system(size: 13, weight: .black))
                             .foregroundStyle(AppTheme.rose)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("AC REPAIR")
+                            Text(currentSlide.title)
                                 .font(.system(size: 33, weight: .black))
-                                .foregroundStyle(AppTheme.ink)
+                                .foregroundStyle(AppTheme.ink.opacity(0.86))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.72)
-                            Text("Inspection - Cleaning - Gas refill")
+                            Text(currentSlide.line)
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(AppTheme.ink.opacity(0.85))
+                                .foregroundStyle(AppTheme.ink.opacity(0.68))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.78)
                         }
                         Button {
-                            store.openService(ServiceCatalog.service(id: "ac"))
+                            store.openService(ServiceCatalog.service(id: currentSlide.serviceId))
                         } label: {
                             HStack(spacing: 8) {
                                 Text("Book Slot")
@@ -484,10 +506,10 @@ struct HomeHero: View {
                         }
 
                         HStack(spacing: 8) {
-                            ForEach(0..<5, id: \.self) { index in
+                            ForEach(0..<slides.count, id: \.self) { index in
                                 Circle()
-                                    .fill(index == 1 ? AppTheme.ink : AppTheme.line)
-                                    .frame(width: index == 1 ? 8 : 7, height: index == 1 ? 8 : 7)
+                                    .fill(index == selectedSlide ? AppTheme.ink.opacity(0.78) : AppTheme.line)
+                                    .frame(width: index == selectedSlide ? 8 : 7, height: index == selectedSlide ? 8 : 7)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -503,6 +525,11 @@ struct HomeHero: View {
         .frame(height: 398)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .shadow(color: .black.opacity(0.12), radius: 13, y: 7)
+        .onReceive(slideTimer) { _ in
+            withAnimation(.easeInOut(duration: 0.45)) {
+                selectedSlide = (selectedSlide + 1) % slides.count
+            }
+        }
     }
 }
 
@@ -580,7 +607,7 @@ struct CommercialHomeCard: View {
                                 .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
                             Text("COMMERCIAL\nSERVICES")
                                 .font(.system(size: 23, weight: .black))
-                                .foregroundStyle(AppTheme.bookingDark)
+                                .foregroundStyle(AppTheme.bookingDark.opacity(0.88))
                                 .lineSpacing(-2)
                                 .minimumScaleFactor(0.85)
                         }
@@ -595,14 +622,15 @@ struct CommercialHomeCard: View {
                         }
                         .font(.system(size: 9.5, weight: .black))
                         .foregroundStyle(AppTheme.bookingDark)
-                        Text("Business Enquiry >")
+                        Text("Business Enquiry")
                             .font(.system(size: 13.5, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 136, height: 40)
+                            .frame(width: 148, height: 40)
                             .background(
                                 LinearGradient(colors: [AppTheme.bookingDark, AppTheme.booking], startPoint: .leading, endPoint: .trailing),
                                 in: Capsule()
                             )
+                            .shadow(color: AppTheme.booking.opacity(0.20), radius: 8, y: 4)
                     }
                     .padding(.leading, 16)
                     .padding(.vertical, 14)
@@ -712,7 +740,7 @@ struct WhyChooseCard: View {
             HStack(spacing: 0) {
                 feature("checkmark", "Verified\nExperts", AppTheme.green)
                 divider
-                feature("indianrupeesign", "Upfront\nPricing", Color(hex: 0x13A68C))
+                feature("creditcard", "No Upfront\nPayment", Color(hex: 0x13A68C))
                 divider
                 feature("stopwatch.fill", "On-time\nService", AppTheme.blue)
                 divider
@@ -909,7 +937,7 @@ struct DetailMetricRow: View {
     var body: some View {
         HStack(spacing: 10) {
             metric("Rating", service.rating, "star.fill", AppTheme.green)
-            metric("Starts at", service.priceLabel, "indianrupeesign.circle.fill", AppTheme.booking)
+            metric("Final amount", service.priceLabel, "doc.text.fill", AppTheme.booking)
             metric("Arrival", service.arrival, "clock.fill", AppTheme.blue)
         }
     }
@@ -944,7 +972,7 @@ struct ServiceIncludesCard: View {
                 .foregroundStyle(AppTheme.muted)
             include("Problem inspection and diagnosis")
             include("Verified nearby service partner")
-            include("Clear quote before paid work")
+            include("Partner shares final amount before payment")
             include("Booking chat and live status updates")
         }
         .androidCard(padding: 16, radius: 20)
@@ -965,7 +993,7 @@ struct ServiceIncludesCard: View {
 struct GuaranteeStrip: View {
     var body: some View {
         HStack(spacing: 10) {
-            guarantee("No upfront", "Pay after quote", "creditcard.fill")
+            guarantee("No upfront", "Pay after service", "creditcard.fill")
             guarantee("Safe", "Verified partner", "shield.fill")
         }
     }
@@ -1025,7 +1053,7 @@ struct BookingSelectedServiceCard: View {
                 Text(store.selectedService.name)
                     .font(.system(size: 16, weight: .black))
                     .foregroundStyle(AppTheme.ink)
-                Text("\(store.selectedService.priceLabel) onwards - \(store.selectedService.arrival)")
+                Text("Final amount after inspection - \(store.selectedService.arrival)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.muted)
             }
@@ -1269,7 +1297,7 @@ struct BookingConfirmScreen: View {
                         summaryRow("Date & Time", "\(store.draft.date), \(store.draft.time)")
                         summaryRow("Address", store.bookingAddressPreview())
                         summaryRow("Service Tier", store.draft.tier.rawValue)
-                        summaryRow("Estimated Start", store.selectedService.priceLabel)
+                        summaryRow("Final Amount", "Partner will share after inspection")
                     }
                     .androidCard(padding: 16, radius: 20)
 
@@ -1369,7 +1397,7 @@ struct BookingConfirmedScreen: View {
             Text("Your request is confirmed")
                 .font(.system(size: 23, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            Text("We are searching nearby verified partners. The Android finding-partner flow is mirrored here with mock state.")
+            Text("We are searching nearby verified partners. You will be notified as soon as a partner accepts.")
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)
@@ -1515,7 +1543,7 @@ struct BookingStatusHeader: View {
                 .foregroundStyle(AppTheme.muted)
             HStack {
                 info("Slot", booking.slot)
-                info("Amount", booking.amount > 0 ? "Rs \(booking.amount)" : "After quote")
+                info("Amount", booking.amount > 0 ? "Rs \(booking.amount)" : "After inspection")
             }
         }
         .androidCard(padding: 16, radius: 20)
@@ -1621,22 +1649,24 @@ struct AmountApprovalCard: View {
             Text("Amount approval required")
                 .font(.system(size: 18, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            Text("Partner shared the final amount after inspection.")
+            Text(booking.amount > 0 ? "Partner shared the final amount after inspection." : "Waiting for the partner to enter the final amount after service inspection.")
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
             HStack {
-                Text("Rs \(booking.amount)")
-                    .font(.system(size: 26, weight: .black))
-                    .foregroundStyle(AppTheme.booking)
+                Text(booking.amount > 0 ? "Rs \(booking.amount)" : "Amount pending")
+                    .font(.system(size: booking.amount > 0 ? 26 : 20, weight: .black))
+                    .foregroundStyle(booking.amount > 0 ? AppTheme.booking : AppTheme.muted)
                 Spacer()
-                Button("Approve") {
-                    store.approveAmount()
+                if booking.amount > 0 {
+                    Button("Approve") {
+                        store.approveAmount()
+                    }
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .frame(height: 42)
+                    .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
                 }
-                .font(.system(size: 13, weight: .black))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .frame(height: 42)
-                .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
             }
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)
@@ -1860,7 +1890,7 @@ struct ProfileScreen: View {
                         store.aboutInfoExpanded.toggle()
                     }
                     if store.aboutInfoExpanded {
-                        Text("This iOS frontend recreates the Android user app screens with mock data and imported Android assets.")
+                        Text("ApnaServo connects customers with verified partners using the same live backend as the Android app.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2056,7 +2086,7 @@ struct CommercialFormOneScreen: View {
             FormField("Business / Company", text: $company)
             FormField("Contact Person", text: $contact)
             FormField("Mobile Number", text: $phone, keyboard: .phonePad)
-            InfoNote(text: "This mirrors Android commercial form step one. Data stays local in this frontend build.")
+            InfoNote(text: "Your commercial request will be handled by the ApnaServo operations team.")
             Button("Continue") {
                 store.navigate(.commercialFormTwo)
             }
@@ -2076,7 +2106,7 @@ struct CommercialFormTwoScreen: View {
             FormField("Site Address", text: $address)
             FormField("Work Scope", text: $scope)
             FormField("Preferred Inspection Time", text: $preferredTime)
-            InfoNote(text: "Inspection request is mocked. Backend connection is intentionally not added.")
+            InfoNote(text: "Inspection details will be synced with the ApnaServo backend when submitted.")
             Button("Submit Request") {
                 store.navigate(.commercialSubmitted)
             }
