@@ -365,32 +365,35 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<CLLocation, Never>?
+    private var lastLocation = CLLocation(
+        latitude: AppConfig.defaultLatitude,
+        longitude: AppConfig.defaultLongitude
+    )
 
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        if manager.authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        }
+        manager.startUpdatingLocation()
     }
 
     func currentLocation() async -> CLLocation {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            if manager.authorizationStatus == .notDetermined {
-                manager.requestWhenInUseAuthorization()
-            }
-            manager.requestLocation()
-        }
+        lastLocation
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let fallback = CLLocation(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
-        continuation?.resume(returning: locations.last ?? fallback)
-        continuation = nil
+        if let location = locations.last {
+            lastLocation = location
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(returning: CLLocation(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude))
-        continuation = nil
+        lastLocation = CLLocation(
+            latitude: AppConfig.defaultLatitude,
+            longitude: AppConfig.defaultLongitude
+        )
     }
 }

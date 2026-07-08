@@ -342,32 +342,35 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<CLLocationCoordinate2D, Never>?
+    private var lastCoordinate = CLLocationCoordinate2D(
+        latitude: AppConfig.defaultLatitude,
+        longitude: AppConfig.defaultLongitude
+    )
 
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        if manager.authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        }
+        manager.startUpdatingLocation()
     }
 
     func currentCoordinate() async -> CLLocationCoordinate2D {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            if manager.authorizationStatus == .notDetermined {
-                manager.requestWhenInUseAuthorization()
-            }
-            manager.requestLocation()
-        }
+        lastCoordinate
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let coordinate = locations.last?.coordinate ?? CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
-        continuation?.resume(returning: coordinate)
-        continuation = nil
+        if let coordinate = locations.last?.coordinate {
+            lastCoordinate = coordinate
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(returning: CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude))
-        continuation = nil
+        lastCoordinate = CLLocationCoordinate2D(
+            latitude: AppConfig.defaultLatitude,
+            longitude: AppConfig.defaultLongitude
+        )
     }
 }
