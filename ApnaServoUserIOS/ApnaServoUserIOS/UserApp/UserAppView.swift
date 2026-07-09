@@ -368,6 +368,8 @@ private struct HomeHeroSlide {
 struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
     @State private var selectedSlide = 0
+    @State private var homeSearchText = ""
+    @FocusState private var homeSearchFocused: Bool
     private let slideTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
     private let slides = [
         HomeHeroSlide(serviceId: "ac", asset: "banner_ac_service", eyebrow: "VERIFIED SERVICE", title: "AC REPAIR", line: "Inspection - Cleaning - Gas refill"),
@@ -430,35 +432,8 @@ struct HomeHero: View {
                         .foregroundStyle(AppTheme.muted)
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                    Button {
-                        store.openServiceSearch()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 21, weight: .medium))
-                                .foregroundStyle(AppTheme.rose)
-                                .frame(width: 24)
-                            Text("Search for services (AC repair, plumber...)")
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Rectangle()
-                                .fill(AppTheme.line)
-                                .frame(width: 1, height: 30)
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(AppTheme.rose)
-                                .frame(width: 24)
-                        }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.muted)
-                        .padding(.horizontal, 16)
-                        .frame(width: proxy.size.width - 28, height: 58)
-                        .background(Color.white, in: Capsule())
-                        .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
-                        .shadow(color: AppTheme.booking.opacity(0.16), radius: 10, y: 5)
-                    }
-                    .buttonStyle(.plain)
+                    homeSearchPanel(width: proxy.size.width - 28)
+                        .zIndex(20)
 
                     Spacer()
 
@@ -519,6 +494,114 @@ struct HomeHero: View {
                 selectedSlide = (selectedSlide + 1) % slides.count
             }
         }
+    }
+
+    private var homeSearchResults: [ServiceItem] {
+        let query = homeSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        return store.services.filter { service in
+            service.name.lowercased().contains(query) ||
+            service.category.lowercased().contains(query) ||
+            service.description.lowercased().contains(query) ||
+            service.shortCode.lowercased().contains(query)
+        }
+    }
+
+    private func homeSearchPanel(width: CGFloat) -> some View {
+        let limitedResults = Array(homeSearchResults.prefix(4))
+
+        return ZStack(alignment: .top) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(AppTheme.rose)
+                    .frame(width: 24)
+                TextField("Search for services (AC repair, plumber...)", text: $homeSearchText)
+                    .focused($homeSearchFocused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                if !homeSearchText.isEmpty {
+                    Button {
+                        homeSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Rectangle()
+                    .fill(AppTheme.line)
+                    .frame(width: 1, height: 30)
+                Button {
+                    homeSearchFocused = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(AppTheme.rose)
+                        .frame(width: 24)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .frame(width: width, height: 58)
+            .background(Color.white, in: Capsule())
+            .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
+            .shadow(color: AppTheme.booking.opacity(0.16), radius: 10, y: 5)
+            .zIndex(2)
+
+            if homeSearchFocused && !homeSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(spacing: 0) {
+                    if limitedResults.isEmpty {
+                        Text("No matching services found")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                    } else {
+                        ForEach(Array(limitedResults.enumerated()), id: \.element.id) { index, service in
+                            Button {
+                                homeSearchFocused = false
+                                homeSearchText = ""
+                                store.openService(service)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    ServiceLogo(service: service, size: 36, boxed: false)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(service.name)
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(AppTheme.ink.opacity(0.9))
+                                        Text(service.category)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(AppTheme.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(AppTheme.rose)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                            }
+                            .buttonStyle(.plain)
+                            if index < limitedResults.count - 1 {
+                                Divider().padding(.leading, 58)
+                            }
+                        }
+                    }
+                }
+                .frame(width: width)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppTheme.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+                .offset(y: 66)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .zIndex(1)
+            }
+        }
+        .frame(width: width, height: 58)
     }
 }
 
