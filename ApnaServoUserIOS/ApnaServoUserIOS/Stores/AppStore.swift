@@ -55,6 +55,7 @@ final class UserAppStore: ObservableObject {
     @Published var showLegalSheet = false
     @Published var paymentInfoExpanded = false
     @Published var aboutInfoExpanded = false
+    @Published var shouldFocusServiceSearch = false
     @Published var selectedCommercialServiceTitle = "Commercial AC Service"
     @Published var selectedCommercialServiceId = "ac"
 
@@ -145,6 +146,11 @@ final class UserAppStore: ObservableObject {
         if let category {
             activeCategory = category
         }
+        navigate(.services)
+    }
+
+    func openServiceSearch() {
+        shouldFocusServiceSearch = true
         navigate(.services)
     }
 

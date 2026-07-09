@@ -431,7 +431,7 @@ struct HomeHero: View {
                         .frame(maxWidth: .infinity, alignment: .center)
 
                     Button {
-                        store.showAllServices()
+                        store.openServiceSearch()
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
@@ -534,7 +534,7 @@ struct QuickServiceStrip: View {
                     store.openService(service)
                 } label: {
                     VStack(spacing: 8) {
-                        ServiceLogo(service: service, size: 52)
+                        ServiceLogo(service: service, size: 58, boxed: false)
                         Text(quickTitle(for: service))
                             .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(AppTheme.ink.opacity(0.88))
@@ -544,9 +544,7 @@ struct QuickServiceStrip: View {
                             .frame(height: 30)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.roseSoft, lineWidth: 1.2))
+                    .frame(height: 112)
                 }
                 .buttonStyle(.plain)
             }
@@ -763,10 +761,13 @@ struct WhyChooseCard: View {
 
 struct AllServicesScreen: View {
     @EnvironmentObject private var store: UserAppStore
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             TopBar(title: "All Services", subtitle: store.activeCategory, backAction: { store.back() })
+            serviceSearchBar
             HStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 10) {
@@ -783,8 +784,13 @@ struct AllServicesScreen: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
-                        ForEach(store.filteredServices) { service in
-                            ServiceListCard(service: service)
+                        if visibleServices.isEmpty {
+                            EmptyState(title: "No services found", subtitle: "Try AC repair, plumber, electrician, cleaning, or appliance.")
+                                .padding(.top, 28)
+                        } else {
+                            ForEach(visibleServices) { service in
+                                ServiceListCard(service: service)
+                            }
                         }
                     }
                     .padding(14)
@@ -793,6 +799,68 @@ struct AllServicesScreen: View {
             }
         }
         .background(AppTheme.bg)
+        .onAppear {
+            guard store.shouldFocusServiceSearch else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                searchFocused = true
+                store.shouldFocusServiceSearch = false
+            }
+        }
+    }
+
+    private var visibleServices: [ServiceItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let base = query.isEmpty ? store.filteredServices : store.services
+        guard !query.isEmpty else { return base }
+        return base.filter { service in
+            service.name.lowercased().contains(query) ||
+            service.category.lowercased().contains(query) ||
+            service.description.lowercased().contains(query) ||
+            service.shortCode.lowercased().contains(query)
+        }
+    }
+
+    private var serviceSearchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(AppTheme.rose)
+            TextField("Search for services (AC repair, plumber...)", text: $searchText)
+                .focused($searchFocused)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                .buttonStyle(.plain)
+            }
+            Rectangle()
+                .fill(AppTheme.line)
+                .frame(width: 1, height: 30)
+            Button {
+                searchFocused = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(AppTheme.rose)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 58)
+        .background(Color.white, in: Capsule())
+        .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
+        .shadow(color: AppTheme.booking.opacity(0.12), radius: 10, y: 5)
+        .padding(.horizontal, 18)
+        .padding(.top, 4)
+        .padding(.bottom, 10)
     }
 }
 
