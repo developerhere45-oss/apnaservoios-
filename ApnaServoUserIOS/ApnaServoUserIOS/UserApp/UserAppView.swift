@@ -21,9 +21,6 @@ struct UserAppView: View {
                 BottomNav()
             }
         }
-        .onAppear {
-            store.startLiveBookingSync()
-        }
         .background(AppTheme.bg)
     }
 
@@ -39,7 +36,7 @@ struct UserAppView: View {
     private var showsFloatingFooter: Bool {
         guard store.latestBooking != nil else { return false }
         switch store.screen {
-        case .bookings:
+        case .home, .services, .detail, .bookings, .profile, .notifications, .commercial:
             return true
         default:
             return false
@@ -303,13 +300,16 @@ struct StartupLocationGateScreen: View {
     var body: some View {
         VStack(spacing: 22) {
             Spacer()
-            Image(systemName: "location.fill")
-                .font(.system(size: 92, weight: .bold))
-                .foregroundStyle(AppTheme.booking)
-                .shadow(color: AppTheme.booking.opacity(0.18), radius: 12, y: 6)
+            ZStack {
+                Circle()
+                    .fill(AppTheme.roseSoft)
+                    .frame(width: 210, height: 210)
+                AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
+                    .frame(width: 142, height: 142)
+            }
             VStack(spacing: 8) {
                 Text("Enable service location")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 26, weight: .black))
                     .foregroundStyle(AppTheme.ink)
                 Text("ApnaServo uses your location to show nearby verified partners in Guwahati.")
                     .font(.system(size: 14))
@@ -337,315 +337,141 @@ struct HomeScreen: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    HomeHero()
-                    QuickServiceStrip()
-                    CommercialHomeCard()
-                    ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
-                    ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
-                    WhyChooseCard()
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                HomeHero()
+                QuickServiceStrip()
+                CommercialHomeCard()
+                ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
+                if !store.bookings.isEmpty {
+                    RecentBookingSection()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 128)
-                .frame(width: proxy.size.width, alignment: .top)
+                ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
+                WhyChooseCard()
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 130)
         }
         .background(AppTheme.bg)
     }
 }
 
-private struct HomeHeroSlide {
-    let serviceId: String
-    let asset: String
-    let eyebrow: String
-    let title: String
-    let line: String
-}
-
 struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
-    @State private var selectedSlide = 0
-    @State private var homeSearchText = ""
-    @FocusState private var homeSearchFocused: Bool
-    private let slideTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
-    private let slides = [
-        HomeHeroSlide(serviceId: "ac", asset: "banner_ac_service", eyebrow: "VERIFIED SERVICE", title: "AC REPAIR", line: "Inspection - Cleaning - Gas refill"),
-        HomeHeroSlide(serviceId: "plumbing", asset: "banner_plumbing_service", eyebrow: "FAST HOME CARE", title: "PLUMBER", line: "Tap - Leakage - Water line repair"),
-        HomeHeroSlide(serviceId: "electrician", asset: "banner_electrician_service", eyebrow: "TRUSTED EXPERTS", title: "ELECTRICIAN", line: "Wiring - Switchboard - Fan repair"),
-        HomeHeroSlide(serviceId: "cleaning", asset: "banner_cleaning_service", eyebrow: "CLEAN & SAFE", title: "CLEANING", line: "Home - Bathroom - Deep cleaning")
-    ]
-
-    private var currentSlide: HomeHeroSlide {
-        slides[selectedSlide % slides.count]
-    }
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .top) {
-                AndroidAssetImage(name: currentSlide.asset, contentMode: .fill)
-                    .id(currentSlide.asset)
-                    .frame(width: proxy.size.width, height: 398)
-                    .clipped()
-                    .transition(.opacity)
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.82),
-                        Color.white.opacity(0.45),
-                        AppTheme.bg.opacity(0.78)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomLeading
-                )
-                .frame(width: proxy.size.width, height: 398)
+        ZStack(alignment: .top) {
+            AndroidAssetImage(name: "hero_ro_background", contentMode: .fill)
+                .frame(height: 326)
+                .frame(maxWidth: .infinity)
+                .clipped()
+            LinearGradient(colors: [.black.opacity(0.42), .black.opacity(0.10), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
 
-                VStack(spacing: 12) {
-                    HStack {
-                        AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
-                            .frame(width: 42, height: 42)
-
-                        Spacer(minLength: 8)
-
-                        AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
-                            .frame(width: min(184, proxy.size.width * 0.52), height: 54)
-
-                        Spacer(minLength: 8)
-
-                        Button {
-                            store.navigate(.notifications)
-                        } label: {
-                            AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
-                                .frame(width: 42, height: 42)
-                                .overlay(alignment: .topTrailing) {
-                                    if store.notifications.contains(where: { !$0.isRead }) {
-                                        Circle().fill(AppTheme.booking).frame(width: 9, height: 9)
-                                    }
-                                }
-                        }
-                        .contentShape(Circle())
-                    }
-
-                    Text("Home services at your doorstep")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppTheme.muted)
-                        .frame(maxWidth: .infinity, alignment: .center)
-
-                    homeSearchPanel(width: proxy.size.width - 28)
-                        .zIndex(20)
-
+            VStack(spacing: 14) {
+                HStack(alignment: .center) {
+                    AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                        .frame(width: 128, height: 42)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 10)
+                        .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 12))
                     Spacer()
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(currentSlide.eyebrow)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppTheme.rose)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(currentSlide.title)
-                                .font(.system(size: 33, weight: .bold))
-                                .foregroundStyle(AppTheme.ink.opacity(0.82))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                            Text(currentSlide.line)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppTheme.ink.opacity(0.68))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                        }
-                        Button {
-                            store.openService(ServiceCatalog.service(id: currentSlide.serviceId))
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text("Book Slot")
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 126, height: 48)
-                            .background(Color(hex: 0x11141A), in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.booking, lineWidth: 1))
-                                .shadow(color: AppTheme.booking.opacity(0.28), radius: 6, y: 3)
-                        }
-
-                        HStack(spacing: 8) {
-                            ForEach(0..<slides.count, id: \.self) { index in
-                                Circle()
-                                    .fill(index == selectedSlide ? AppTheme.ink.opacity(0.78) : AppTheme.line)
-                                    .frame(width: index == selectedSlide ? 8 : 7, height: index == selectedSlide ? 8 : 7)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(width: proxy.size.width - 28)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
-            }
-            .frame(width: proxy.size.width, height: 398)
-        }
-        .frame(height: 398)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 13, y: 7)
-        .onReceive(slideTimer) { _ in
-            withAnimation(.easeInOut(duration: 0.45)) {
-                selectedSlide = (selectedSlide + 1) % slides.count
-            }
-        }
-    }
-
-    private var homeSearchResults: [ServiceItem] {
-        let query = homeSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return [] }
-        return store.services.filter { service in
-            service.name.lowercased().contains(query) ||
-            service.category.lowercased().contains(query) ||
-            service.description.lowercased().contains(query) ||
-            service.shortCode.lowercased().contains(query)
-        }
-    }
-
-    private func homeSearchPanel(width: CGFloat) -> some View {
-        let limitedResults = Array(homeSearchResults.prefix(4))
-
-        return ZStack(alignment: .top) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(AppTheme.rose)
-                    .frame(width: 24)
-                TextField("Search for services (AC repair, plumber...)", text: $homeSearchText)
-                    .focused($homeSearchFocused)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.ink)
-                if !homeSearchText.isEmpty {
                     Button {
-                        homeSearchText = ""
+                        store.navigate(.notifications)
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(AppTheme.muted)
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                            .frame(width: 42, height: 42)
+                            .background(.white, in: Circle())
+                            .overlay(alignment: .topTrailing) {
+                                if store.notifications.contains(where: { !$0.isRead }) {
+                                    Circle().fill(AppTheme.booking).frame(width: 10, height: 10)
+                                }
+                            }
                     }
-                    .buttonStyle(.plain)
                 }
-                Rectangle()
-                    .fill(AppTheme.line)
-                    .frame(width: 1, height: 30)
+
                 Button {
-                    homeSearchFocused = true
+                    store.showAllServices()
                 } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(AppTheme.rose)
-                        .frame(width: 24)
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Search for AC, plumber, cleaning...")
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.horizontal, 15)
+                    .frame(height: 48)
+                    .background(Color(hex: 0x111111).opacity(0.92), in: RoundedRectangle(cornerRadius: 15))
+                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.12), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .frame(width: width, height: 58)
-            .background(Color.white, in: Capsule())
-            .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
-            .shadow(color: AppTheme.booking.opacity(0.16), radius: 10, y: 5)
-            .zIndex(2)
 
-            if homeSearchFocused && !homeSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                VStack(spacing: 0) {
-                    if limitedResults.isEmpty {
-                        Text("No matching services found")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppTheme.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                    } else {
-                        ForEach(Array(limitedResults.enumerated()), id: \.element.id) { index, service in
-                            Button {
-                                homeSearchFocused = false
-                                homeSearchText = ""
-                                store.openService(service)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    ServiceLogo(service: service, size: 36, boxed: false)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(service.name)
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(AppTheme.ink.opacity(0.9))
-                                        Text(service.category)
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundStyle(AppTheme.muted)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(AppTheme.rose)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                            if index < limitedResults.count - 1 {
-                                Divider().padding(.leading, 58)
-                            }
-                        }
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("RO SERVICE")
+                            .font(.system(size: 24, weight: .black))
+                            .foregroundStyle(.white)
+                        Text("Filter - Leakage - Installation")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                        Text("Starts at Rs 299")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.booking.opacity(0.9), in: Capsule())
+                    }
+                    Spacer()
+                    Button {
+                        store.openService(ServiceCatalog.service(id: "ro"))
+                    } label: {
+                        Text("Book")
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(.white)
+                            .frame(width: 86, height: 42)
+                            .background(AppTheme.booking, in: RoundedRectangle(cornerRadius: 15))
                     }
                 }
-                .frame(width: width)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppTheme.line, lineWidth: 1))
-                .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
-                .offset(y: 66)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .zIndex(1)
             }
+            .padding(16)
         }
-        .frame(width: width, height: 58)
+        .frame(height: 326)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 7)
     }
 }
 
 struct QuickServiceStrip: View {
     @EnvironmentObject private var store: UserAppStore
-    private let quickIds = ["ac", "electrician", "plumbing", "cleaning", "appliances"]
+    private let quickIds = ["ac", "electrician", "plumbing", "appliances"]
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             ForEach(quickIds, id: \.self) { id in
                 let service = ServiceCatalog.service(id: id)
                 Button {
                     store.openService(service)
                 } label: {
-                    VStack(spacing: 8) {
-                        ServiceLogo(service: service, size: 58, boxed: false)
-                        Text(quickTitle(for: service))
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink.opacity(0.88))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.78)
-                            .frame(height: 30)
+                    VStack(spacing: 7) {
+                        ServiceLogo(service: service, size: 44)
+                        Text(service.id == "appliances" ? "Appliance" : service.name.components(separatedBy: " ").first ?? service.name)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                            .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 112)
+                    .padding(.vertical, 10)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
-        }
-        .padding(10)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(AppTheme.line, lineWidth: 1))
-        .shadow(color: .black.opacity(0.10), radius: 10, y: 5)
-    }
-
-    private func quickTitle(for service: ServiceItem) -> String {
-        switch service.id {
-        case "ac": return "AC Repair"
-        case "electrician": return "Electric"
-        case "plumbing": return "Plumber"
-        case "cleaning": return "Cleaning\nServices"
-        case "appliances": return "Appliance"
-        default: return service.name
         }
     }
 }
@@ -654,65 +480,35 @@ struct CommercialHomeCard: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        GeometryReader { proxy in
-            Button {
-                store.navigate(.commercial)
-            } label: {
-                ZStack(alignment: .leading) {
-                    AndroidAssetImage(name: "commercial_home_card", contentMode: .fill)
-                        .frame(width: proxy.size.width, height: 172)
-                        .clipped()
-                    LinearGradient(
-                        colors: [AppTheme.bg.opacity(0.94), AppTheme.bg.opacity(0.63), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: proxy.size.width, height: 172)
-                    VStack(alignment: .leading, spacing: 9) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "building.2.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppTheme.bookingDark)
-                                .frame(width: 42, height: 42)
-                                .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
-                            Text("COMMERCIAL\nSERVICES")
-                                .font(.system(size: 23, weight: .bold))
-                                .foregroundStyle(AppTheme.bookingDark.opacity(0.78))
-                                .lineSpacing(-2)
-                                .minimumScaleFactor(0.85)
-                        }
-                        Text("Offices, shops, hotels, warehouses & more.")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(AppTheme.muted)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                        HStack(spacing: 12) {
-                            Label("Professional team", systemImage: "checkmark")
-                            Label("On-time service", systemImage: "clock.fill")
-                        }
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundStyle(AppTheme.bookingDark.opacity(0.72))
-                        Text("Business Enquiry")
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 148, height: 40)
-                            .background(
-                                LinearGradient(colors: [AppTheme.bookingDark, AppTheme.booking], startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
-                            .shadow(color: AppTheme.booking.opacity(0.20), radius: 8, y: 4)
-                    }
-                    .padding(.leading, 16)
-                    .padding(.vertical, 14)
-                    .frame(width: proxy.size.width, alignment: .leading)
+        Button {
+            store.navigate(.commercial)
+        } label: {
+            ZStack(alignment: .leading) {
+                AndroidAssetImage(name: "commercial_home_card", contentMode: .fill)
+                    .frame(height: 126)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                LinearGradient(colors: [.black.opacity(0.56), .clear], startPoint: .leading, endPoint: .trailing)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Commercial Services")
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundStyle(.white)
+                    Text("AC, plumbing and appliances for offices.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("Explore")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundStyle(AppTheme.ink)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 7)
+                        .background(.white, in: Capsule())
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.line, lineWidth: 1))
-                .shadow(color: .black.opacity(0.14), radius: 10, y: 6)
+                .padding(16)
             }
-            .buttonStyle(.plain)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.14), radius: 9, y: 5)
         }
-        .frame(height: 172)
+        .buttonStyle(.plain)
     }
 }
 
@@ -723,29 +519,14 @@ struct ServiceGridSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(AppTheme.ink.opacity(0.9))
-                Spacer()
-                Button("View all") {
-                    store.showAllServices()
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppTheme.rose)
+            SectionTitle(title: title, actionTitle: "View all") {
+                store.showAllServices()
             }
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 13), count: 3),
-                alignment: .center,
-                spacing: 22
-            ) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(services) { service in
                     HomeServiceCard(service: service)
                 }
             }
-            .padding(14)
-            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.roseSoft, lineWidth: 1.1))
         }
     }
 }
@@ -758,29 +539,36 @@ struct HomeServiceCard: View {
         Button {
             store.openService(service)
         } label: {
-            VStack(spacing: 10) {
-                GeometryReader { proxy in
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack(alignment: .topTrailing) {
                     AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
-                        .frame(width: proxy.size.width, height: 78)
+                        .frame(height: 92)
+                        .frame(maxWidth: .infinity)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    Text(service.rating)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(AppTheme.green, in: Capsule())
+                        .padding(8)
                 }
-                .frame(height: 78)
                 Text(service.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.ink.opacity(0.88))
-                    .multilineTextAlignment(.center)
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundStyle(AppTheme.ink)
                     .lineLimit(2)
-                    .frame(height: 34)
-                    .frame(maxWidth: .infinity)
-                Text("Book")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 76, height: 34)
-                    .background(AppTheme.rose, in: Capsule())
-                    .shadow(color: AppTheme.rose.opacity(0.35), radius: 7, y: 4)
+                    .frame(minHeight: 34, alignment: .topLeading)
+                HStack {
+                    Text(service.priceLabel)
+                        .font(.system(size: 12, weight: .bold))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundStyle(AppTheme.rose)
             }
-            .frame(maxWidth: .infinity)
+            .androidCard(padding: 10, radius: 18, shadow: 3)
         }
         .buttonStyle(.plain)
     }
@@ -803,54 +591,40 @@ struct RecentBookingSection: View {
 
 struct WhyChooseCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Why choose us?")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(AppTheme.ink.opacity(0.9))
-            HStack(spacing: 0) {
-                feature("checkmark", "Verified\nExperts", AppTheme.green)
-                divider
-                feature("creditcard", "No Upfront\nPayment", Color(hex: 0x13A68C))
-                divider
-                feature("stopwatch.fill", "On-time\nService", AppTheme.blue)
-                divider
-                feature("star.fill", "100%\nSatisfaction", Color(hex: 0xE4A900))
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Why choose ApnaServo?")
+                .font(.system(size: 18, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            feature("Verified local partners", "Background checked experts for home services.")
+            feature("No upfront payment", "Final amount is confirmed after inspection.")
+            feature("Live booking status", "Finding partner, assigned and progress states match Android.")
+        }
+        .androidCard(padding: 16, radius: 20)
+    }
+
+    private func feature(_ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppTheme.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.muted)
             }
+            Spacer()
         }
-        .androidCard(padding: 18, radius: 24, border: AppTheme.line, shadow: 9)
-    }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(AppTheme.line)
-            .frame(width: 1, height: 70)
-    }
-
-    private func feature(_ icon: String, _ title: String, _ color: Color) -> some View {
-        VStack(spacing: 9) {
-            Image(systemName: icon)
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(color)
-                .frame(height: 30)
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.ink.opacity(0.86))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
 struct AllServicesScreen: View {
     @EnvironmentObject private var store: UserAppStore
-    @State private var searchText = ""
-    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             TopBar(title: "All Services", subtitle: store.activeCategory, backAction: { store.back() })
-            serviceSearchBar
             HStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 10) {
@@ -867,13 +641,8 @@ struct AllServicesScreen: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
-                        if visibleServices.isEmpty {
-                            EmptyState(title: "No services found", subtitle: "Try AC repair, plumber, electrician, cleaning, or appliance.")
-                                .padding(.top, 28)
-                        } else {
-                            ForEach(visibleServices) { service in
-                                ServiceListCard(service: service)
-                            }
+                        ForEach(store.filteredServices) { service in
+                            ServiceListCard(service: service)
                         }
                     }
                     .padding(14)
@@ -882,68 +651,6 @@ struct AllServicesScreen: View {
             }
         }
         .background(AppTheme.bg)
-        .onAppear {
-            guard store.shouldFocusServiceSearch else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                searchFocused = true
-                store.shouldFocusServiceSearch = false
-            }
-        }
-    }
-
-    private var visibleServices: [ServiceItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let base = query.isEmpty ? store.filteredServices : store.services
-        guard !query.isEmpty else { return base }
-        return base.filter { service in
-            service.name.lowercased().contains(query) ||
-            service.category.lowercased().contains(query) ||
-            service.description.lowercased().contains(query) ||
-            service.shortCode.lowercased().contains(query)
-        }
-    }
-
-    private var serviceSearchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(AppTheme.rose)
-            TextField("Search for services (AC repair, plumber...)", text: $searchText)
-                .focused($searchFocused)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                .buttonStyle(.plain)
-            }
-            Rectangle()
-                .fill(AppTheme.line)
-                .frame(width: 1, height: 30)
-            Button {
-                searchFocused = true
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(AppTheme.rose)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 58)
-        .background(Color.white, in: Capsule())
-        .overlay(Capsule().stroke(AppTheme.rose.opacity(0.72), lineWidth: 1.5))
-        .shadow(color: AppTheme.booking.opacity(0.12), radius: 10, y: 5)
-        .padding(.horizontal, 18)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
     }
 }
 
@@ -1077,7 +784,7 @@ struct DetailMetricRow: View {
     var body: some View {
         HStack(spacing: 10) {
             metric("Rating", service.rating, "star.fill", AppTheme.green)
-            metric("Final amount", service.priceLabel, "doc.text.fill", AppTheme.booking)
+            metric("Starts at", service.priceLabel, "indianrupeesign.circle.fill", AppTheme.booking)
             metric("Arrival", service.arrival, "clock.fill", AppTheme.blue)
         }
     }
@@ -1112,7 +819,7 @@ struct ServiceIncludesCard: View {
                 .foregroundStyle(AppTheme.muted)
             include("Problem inspection and diagnosis")
             include("Verified nearby service partner")
-            include("Partner shares final amount before payment")
+            include("Clear quote before paid work")
             include("Booking chat and live status updates")
         }
         .androidCard(padding: 16, radius: 20)
@@ -1133,7 +840,7 @@ struct ServiceIncludesCard: View {
 struct GuaranteeStrip: View {
     var body: some View {
         HStack(spacing: 10) {
-            guarantee("No upfront", "Pay after service", "creditcard.fill")
+            guarantee("No upfront", "Pay after quote", "creditcard.fill")
             guarantee("Safe", "Verified partner", "shield.fill")
         }
     }
@@ -1193,7 +900,7 @@ struct BookingSelectedServiceCard: View {
                 Text(store.selectedService.name)
                     .font(.system(size: 16, weight: .black))
                     .foregroundStyle(AppTheme.ink)
-                Text("Final amount after inspection - \(store.selectedService.arrival)")
+                Text("\(store.selectedService.priceLabel) onwards - \(store.selectedService.arrival)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.muted)
             }
@@ -1372,7 +1079,7 @@ struct AddressSelectionCard: View {
                 .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)
-            ServiceLocationPreview()
+            MockMapPreview()
         }
     }
 
@@ -1400,7 +1107,7 @@ struct AddressSelectionCard: View {
     }
 }
 
-struct ServiceLocationPreview: View {
+struct MockMapPreview: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(hex: 0xE5F2EC), Color(hex: 0xFDF7F2)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -1437,7 +1144,7 @@ struct BookingConfirmScreen: View {
                         summaryRow("Date & Time", "\(store.draft.date), \(store.draft.time)")
                         summaryRow("Address", store.bookingAddressPreview())
                         summaryRow("Service Tier", store.draft.tier.rawValue)
-                        summaryRow("Final Amount", "Partner will share after inspection")
+                        summaryRow("Estimated Start", store.selectedService.priceLabel)
                     }
                     .androidCard(padding: 16, radius: 20)
 
@@ -1466,10 +1173,11 @@ struct BookingConfirmScreen: View {
                         .outlineCTA()
                     }
 
-                    Button("Firm Confirm") {
+                    Button(store.isBookingSubmitting ? "Confirming..." : "Confirm Booking") {
                         store.confirmBooking()
                     }
                     .roseCTA()
+                    .disabled(store.isBookingSubmitting)
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 28)
@@ -1493,257 +1201,82 @@ struct BookingConfirmScreen: View {
 
 struct BookingConfirmedScreen: View {
     @EnvironmentObject private var store: UserAppStore
-    @State private var showSuccess = true
-    @State private var compactSuccess = false
 
     var body: some View {
-        ZStack {
-            confirmedContent
-                .opacity(showSuccess ? 0 : 1)
-
-            if showSuccess {
-                BookingSuccessTransitionCard(compact: compactSuccess)
-                    .transition(.opacity)
-                    .zIndex(2)
-            }
-        }
-        .background(AppTheme.bg)
-        .onAppear {
-            startSuccessTransition()
-        }
-        .task {
-            await store.refreshLiveBookings()
-        }
-    }
-
-    private var confirmedContent: some View {
         VStack(spacing: 0) {
-            TopBar(
-                title: store.latestBooking?.isAssigned == true ? "Partner Assigned" : "Finding Partner",
-                subtitle: store.latestBooking?.displayId ?? "",
-                backAction: { store.navigate(.home) },
-                trailingTitle: "Help",
-                trailingIcon: "headphones"
-            ) {
-                store.navigate(.support)
-            }
+            TopBar(title: "Booking Confirmed", subtitle: store.latestBooking?.displayId ?? "", backAction: { store.navigate(.home) })
             ScrollView(showsIndicators: false) {
-                if let booking = store.latestBooking {
-                    VStack(spacing: 16) {
-                        if booking.isAssigned {
-                            PartnerAssignedCard(booking: booking)
-                            BookingPendingDetailsCard(booking: booking)
+                VStack(spacing: 16) {
+                    successHeader
+                    if let booking = store.latestBooking {
+                        BookingHistoryCard(booking: booking)
+                        if booking.status == "pending" {
+                            FindingPartnerCard()
                         } else {
-                            FindingPartnerCard(booking: booking)
-                            BookingPendingDetailsCard(booking: booking)
-                            safetyNote
+                            PartnerAssignedCard(booking: booking)
                         }
                         Button("View Booking Status") {
                             store.openTrack(booking)
                         }
-                        .roseCTA()
-                    }
-                    .padding(18)
-                    .padding(.bottom, 114)
-                } else {
-                    EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
-                        .padding(18)
-                }
-            }
-        }
-    }
-
-    private var safetyNote: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "shield.checkered")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppTheme.green)
-                .frame(width: 46, height: 46)
-                .background(AppTheme.greenSoft, in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Your safety is our priority")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.ink.opacity(0.9))
-                Text("We only connect you with verified and trusted professionals.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.muted)
-            }
-            Spacer()
-        }
-        .androidCard(padding: 14, radius: 18, border: AppTheme.greenSoft, shadow: 3)
-    }
-
-    private func startSuccessTransition() {
-        showSuccess = true
-        compactSuccess = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                compactSuccess = true
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.85) {
-            withAnimation(.easeInOut(duration: 0.28)) {
-                showSuccess = false
-            }
-        }
-    }
-}
-
-struct BookingSuccessTransitionCard: View {
-    let compact: Bool
-
-    var body: some View {
-        ZStack {
-            AppTheme.bg.ignoresSafeArea()
-            VStack(spacing: compact ? 8 : 18) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.greenSoft)
-                        .frame(width: compact ? 62 : 116, height: compact ? 62 : 116)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: compact ? 29 : 52, weight: .bold))
-                        .foregroundStyle(AppTheme.green)
-                    ForEach(0..<10, id: \.self) { index in
-                        Circle()
-                            .fill(index.isMultiple(of: 2) ? AppTheme.green : AppTheme.booking)
-                            .frame(width: compact ? 3 : 5, height: compact ? 3 : 5)
-                            .offset(x: compact ? 0 : CGFloat([-78, -52, -14, 38, 76, -68, -28, 24, 58, 84][index]),
-                                    y: compact ? 0 : CGFloat([-42, 34, -82, -66, 22, 64, 82, 70, -88, -10][index]))
-                            .opacity(compact ? 0 : 0.9)
+                        .darkCTA()
+                    } else {
+                        EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
                     }
                 }
-                Text("Booking Confirmed!")
-                    .font(.system(size: compact ? 16 : 28, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("Your booking has been received successfully.")
-                    .font(.system(size: compact ? 10 : 14, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                    .multilineTextAlignment(.center)
+                .padding(18)
             }
-            .frame(width: compact ? 210 : nil)
-            .padding(compact ? 22 : 24)
-            .background(compact ? Color.white : Color.clear, in: RoundedRectangle(cornerRadius: compact ? 22 : 0, style: .continuous))
-            .shadow(color: .black.opacity(compact ? 0.18 : 0), radius: compact ? 22 : 0, y: compact ? 10 : 0)
-            .scaleEffect(compact ? 0.92 : 1)
-            .animation(.spring(response: 0.55, dampingFraction: 0.82), value: compact)
         }
+        .task {
+            store.startBookingPolling()
+        }
+    }
+
+    private var successHeader: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.greenSoft)
+                    .frame(width: 92, height: 92)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 38, weight: .black))
+                    .foregroundStyle(AppTheme.green)
+            }
+            Text("Your request is confirmed")
+                .font(.system(size: 23, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("We are searching nearby verified partners. This screen updates automatically when a partner accepts your booking.")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .androidCard(padding: 18, radius: 22)
     }
 }
 
 struct FindingPartnerCard: View {
-    var booking: Booking? = nil
-    @State private var sweep = false
-
     var body: some View {
-        VStack(spacing: 18) {
-            ZStack(alignment: .center) {
-                ForEach([150, 112, 74], id: \.self) { size in
-                    Circle()
-                        .stroke(AppTheme.booking.opacity(size == 150 ? 0.13 : 0.20), lineWidth: 1.2)
-                        .frame(width: CGFloat(size), height: CGFloat(size))
-                        .background(AppTheme.bookingSoft.opacity(size == 74 ? 0.85 : 0.28), in: Circle())
-                }
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppTheme.booking.opacity(0.7), AppTheme.booking.opacity(0.05)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 70, height: 2.5)
-                    .offset(x: 35)
-                    .rotationEffect(.degrees(sweep ? 360 : 0), anchor: .leading)
-                    .animation(.linear(duration: 1.45).repeatForever(autoreverses: false), value: sweep)
-                Circle()
-                    .fill(AppTheme.booking)
-                    .frame(width: 15, height: 15)
-                Image(systemName: "person.crop.circle.badge.magnifyingglass")
-                    .font(.system(size: 32, weight: .bold))
+        VStack(spacing: 16) {
+            ZStack {
+                Circle().stroke(AppTheme.bookingSoft, lineWidth: 18).frame(width: 130, height: 130)
+                Circle().stroke(AppTheme.booking.opacity(0.28), lineWidth: 9).frame(width: 96, height: 96)
+                ProgressView()
+                    .tint(AppTheme.booking)
+                    .scaleEffect(1.35)
+                Image(systemName: "location.north.fill")
                     .foregroundStyle(AppTheme.booking)
-                    .offset(y: -82)
+                    .offset(x: 42, y: -36)
             }
-            VStack(spacing: 8) {
-                Text("Finding the best expert for you...")
-                    .font(.system(size: 23, weight: .bold))
-                    .foregroundStyle(AppTheme.bookingDark)
-                    .multilineTextAlignment(.center)
-                Text("Searching nearby verified partners")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                if let booking {
-                    Text("Booking ID: \(booking.displayId)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.booking)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(AppTheme.bookingSoft, in: Capsule())
-                }
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "bell.fill")
-                    .foregroundStyle(AppTheme.booking)
-                    .frame(width: 42, height: 42)
-                    .background(AppTheme.bookingSoft, in: Circle())
-                Text("We will notify you once a partner is assigned.")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.ink.opacity(0.82))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(12)
-            .background(AppTheme.greenSoft.opacity(0.65), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            Text("Finding best partner")
+                .font(.system(size: 18, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Request sent to nearby verified experts. We will notify you as soon as a partner accepts.")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .androidCard(padding: 18, radius: 24, border: AppTheme.bookingSoft, shadow: 7)
-        .onAppear {
-            sweep = true
-        }
-    }
-}
-
-struct BookingPendingDetailsCard: View {
-    let booking: Booking
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Booking ID")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.muted)
-                    Text(booking.displayId)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(AppTheme.bookingDark)
-                }
-                Spacer()
-                Label("Copy", systemImage: "doc.on.doc")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.green)
-            }
-            Divider()
-            detailRow("wrench.and.screwdriver.fill", "Service", booking.serviceName)
-            detailRow("calendar", "Date & Time", booking.slot)
-            detailRow("mappin.circle.fill", "Address", booking.address)
-        }
-        .androidCard(padding: 16, radius: 20)
-    }
-
-    private func detailRow(_ icon: String, _ title: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(AppTheme.green)
-                .frame(width: 42, height: 42)
-                .background(AppTheme.greenSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                Text(value)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.ink.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+        .androidCard(padding: 18, radius: 22, border: AppTheme.bookingSoft)
     }
 }
 
@@ -1753,13 +1286,13 @@ struct PartnerAssignedCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack(spacing: 12) {
-                Text(String(displayName.prefix(1)))
+                Text(String(booking.partnerName.prefix(1)))
                     .font(.system(size: 22, weight: .black))
                     .foregroundStyle(.white)
                     .frame(width: 58, height: 58)
                     .background(AppTheme.green, in: Circle())
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(displayName)
+                    Text(booking.partnerName)
                         .font(.system(size: 17, weight: .black))
                         .foregroundStyle(AppTheme.ink)
                     Text("Verified expert - 4.8 rating")
@@ -1783,11 +1316,6 @@ struct PartnerAssignedCard: View {
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.greenSoft)
     }
-
-    private var displayName: String {
-        let clean = booking.partnerName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return clean.isEmpty ? "Assigned Partner" : clean
-    }
 }
 
 struct TrackBookingScreen: View {
@@ -1799,22 +1327,26 @@ struct TrackBookingScreen: View {
             ScrollView(showsIndicators: false) {
                 if let booking = store.latestBooking {
                     VStack(spacing: 16) {
+                        BookingStatusHeader(booking: booking)
                         if booking.isAssigned {
-                            BookingStatusHeader(booking: booking)
                             PartnerAssignedCard(booking: booking)
-                            BookingProgressTimeline(booking: booking)
-                            LiveStatusMapCard(booking: booking)
                         } else {
-                            FindingPartnerCard(booking: booking)
-                            BookingPendingDetailsCard(booking: booking)
-                            BookingProgressTimeline(booking: booking)
+                            FindingPartnerCard()
                         }
+                        BookingProgressTimeline(booking: booking)
+                        MockLiveMapCard(booking: booking)
                         if booking.isAmountApprovalPending {
                             AmountApprovalCard(booking: booking)
                         }
-                        if booking.isAssigned {
+                        HStack(spacing: 10) {
                             Button("Chat") {
                                 store.openBookingChat(booking)
+                            }
+                            .outlineCTA()
+                            Button("Refresh Status") {
+                                Task {
+                                    await store.refreshLatestBooking()
+                                }
                             }
                             .outlineCTA()
                         }
@@ -1828,7 +1360,7 @@ struct TrackBookingScreen: View {
             }
         }
         .task {
-            await store.refreshLiveBookings()
+            store.startBookingPolling()
         }
     }
 }
@@ -1848,14 +1380,14 @@ struct BookingStatusHeader: View {
                         .foregroundStyle(AppTheme.muted)
                 }
                 Spacer()
-                StatusChip(status: booking.presentationStatus)
+                StatusChip(status: booking.status)
             }
             Text(booking.issue)
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
             HStack {
                 info("Slot", booking.slot)
-                info("Amount", booking.amount > 0 ? "Rs \(booking.amount)" : "After inspection")
+                info("Amount", booking.amount > 0 ? "Rs \(booking.amount)" : "After quote")
             }
         }
         .androidCard(padding: 16, radius: 20)
@@ -1899,8 +1431,8 @@ struct BookingProgressTimeline: View {
     }
 
     private var activeIndex: Int {
-        if booking.presentationStatus == "amount_pending" { return 4 }
-        return steps.firstIndex { $0.0 == booking.presentationStatus } ?? 0
+        if booking.status == "amount_pending" { return 4 }
+        return steps.firstIndex { $0.0 == booking.status } ?? 0
     }
 
     private func timelineRow(title: String, active: Bool, isLast: Bool) -> some View {
@@ -1923,7 +1455,7 @@ struct BookingProgressTimeline: View {
     }
 }
 
-struct LiveStatusMapCard: View {
+struct MockLiveMapCard: View {
     let booking: Booking
 
     var body: some View {
@@ -1958,45 +1490,29 @@ struct AmountApprovalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
+            Text("Amount approval required")
                 .font(.system(size: 18, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            Text(message)
+            Text(booking.quoteStatus == "payment_submitted" ? "Waiting for partner payment verification." : "Partner shared the final amount after inspection.")
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
             HStack {
-                Text(booking.amount > 0 ? "Rs \(booking.amount)" : "Amount pending")
-                    .font(.system(size: booking.amount > 0 ? 26 : 20, weight: .black))
-                    .foregroundStyle(booking.amount > 0 ? AppTheme.booking : AppTheme.muted)
+                Text("Rs \(booking.amount)")
+                    .font(.system(size: 26, weight: .black))
+                    .foregroundStyle(AppTheme.booking)
                 Spacer()
-                if booking.canSubmitDirectPayment {
-                    Button("Paid to Partner") {
-                        store.approveAmount()
-                    }
-                    .font(.system(size: 13, weight: .black))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .frame(height: 42)
-                    .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
+                Button(booking.quoteStatus == "payment_submitted" ? "Waiting" : "Paid to Partner") {
+                    store.approveAmount()
                 }
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 42)
+                .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
+                .disabled(booking.quoteStatus == "payment_submitted")
             }
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)
-    }
-
-    private var title: String {
-        if booking.isPaymentSubmitted { return "Waiting for verification" }
-        return booking.amount > 0 ? "Pay partner" : "Final amount pending"
-    }
-
-    private var message: String {
-        if booking.isPaymentSubmitted {
-            return "Your payment confirmation has been sent. The partner will verify the payment and complete the booking."
-        }
-        if booking.amount > 0 {
-            return "Partner shared the final amount after inspection. Pay the partner directly, then mark it paid here."
-        }
-        return "Waiting for the partner to enter the final amount after service inspection."
     }
 }
 
@@ -2023,9 +1539,6 @@ struct BookingsListScreen: View {
                 .padding(18)
                 .padding(.bottom, 114)
             }
-        }
-        .task {
-            await store.refreshLiveBookings()
         }
     }
 
@@ -2069,13 +1582,13 @@ struct BookingsListScreen: View {
     private var filteredBookings: [Booking] {
         switch filter {
         case "Pending":
-            return store.bookings.filter { $0.presentationStatus == "pending" }
+            return store.bookings.filter { $0.status == "pending" }
         case "Ongoing":
-            return store.bookings.filter { !["pending", "completed", "cancelled", "rejected"].contains($0.presentationStatus) }
+            return store.bookings.filter { !["pending", "completed", "cancelled", "rejected"].contains($0.status) }
         case "Completed":
-            return store.bookings.filter { $0.presentationStatus == "completed" }
+            return store.bookings.filter { $0.status == "completed" }
         case "Cancelled":
-            return store.bookings.filter { ["cancelled", "rejected"].contains($0.presentationStatus) }
+            return store.bookings.filter { ["cancelled", "rejected"].contains($0.status) }
         default:
             return store.bookings
         }
@@ -2092,7 +1605,7 @@ struct BookingHistoryCard: View {
         } label: {
             HStack(spacing: 12) {
                 Rectangle()
-                    .fill(statusColor(booking.presentationStatus))
+                    .fill(statusColor(booking.status))
                     .frame(width: 5)
                     .clipShape(Capsule())
                 ServiceLogo(service: ServiceCatalog.service(id: booking.serviceCategory), size: 54)
@@ -2103,7 +1616,7 @@ struct BookingHistoryCard: View {
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                         Spacer()
-                        StatusChip(status: booking.presentationStatus)
+                        StatusChip(status: booking.status)
                     }
                     Text(booking.displayId)
                         .font(.system(size: 11, weight: .bold))
@@ -2197,7 +1710,9 @@ struct ProfileScreen: View {
                     profileAction("My Bookings", "Track active and past bookings", "list.bullet.rectangle.fill") {
                         store.navigate(.bookings)
                     }
-                    SavedAddressPanel()
+                    profileAction("Saved Addresses", "Home and service locations", "house.fill") {
+                        store.toastMessage = store.profile.address.isEmpty ? "No saved address yet." : store.profile.address
+                    }
                     profileAction("Payments", "No upfront payment enabled", "creditcard.fill") {
                         store.paymentInfoExpanded.toggle()
                     }
@@ -2214,6 +1729,16 @@ struct ProfileScreen: View {
                     profileAction("Legal & Account", "Privacy, terms and deletion", "shield.fill") {
                         store.showLegalSheet = true
                     }
+                    profileAction("About ApnaServo", "Trusted home repair services", "info.circle.fill") {
+                        store.aboutInfoExpanded.toggle()
+                    }
+                    if store.aboutInfoExpanded {
+                        Text("Your profile, bookings, support chats, and service updates stay connected with the ApnaServo backend.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .androidCard(padding: 12, radius: 14)
+                    }
                     Button("Logout") {
                         store.logout()
                     }
@@ -2229,18 +1754,26 @@ struct ProfileScreen: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Text(profileInitial)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 28, weight: .black))
                     .foregroundStyle(.white)
                     .frame(width: 72, height: 72)
                     .background(AppTheme.booking, in: Circle())
                 VStack(alignment: .leading, spacing: 5) {
                     Text(store.profile.name.isEmpty ? "ApnaServo Customer" : store.profile.name)
-                        .font(.system(size: 21, weight: .bold))
-                        .foregroundStyle(AppTheme.ink.opacity(0.9))
+                        .font(.system(size: 21, weight: .black))
+                        .foregroundStyle(AppTheme.ink)
                     Text(store.profile.phone.isEmpty ? "Phone not shared" : store.profile.phone)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.muted)
+                    Text("Bookings, addresses and support in one place")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.muted)
                 }
+            }
+            HStack(spacing: 10) {
+                profileStat("Bookings", "\(store.bookings.count)")
+                profileStat("Active", "\(store.activeBookings.count)")
+                profileStat("City", AppConfig.defaultCity)
             }
         }
         .androidCard(padding: 16, radius: 22, border: AppTheme.roseSoft, shadow: 4)
@@ -2248,6 +1781,20 @@ struct ProfileScreen: View {
 
     private var profileInitial: String {
         String((store.profile.name.isEmpty ? "A" : store.profile.name).prefix(1)).uppercased()
+    }
+
+    private func profileStat(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppTheme.muted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private func profileAction(_ title: String, _ subtitle: String, _ icon: String, action: @escaping () -> Void) -> some View {
@@ -2259,8 +1806,8 @@ struct ProfileScreen: View {
                     .background(AppTheme.bookingSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink.opacity(0.88))
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundStyle(AppTheme.ink)
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
@@ -2273,118 +1820,6 @@ struct ProfileScreen: View {
             .androidCard(padding: 14, radius: 17, shadow: 1)
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct SavedAddressPanel: View {
-    @EnvironmentObject private var store: UserAppStore
-    @State private var isAddingAddress = false
-    @State private var newAddressTitle = ""
-    @State private var newAddressDetail = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "house.fill")
-                    .foregroundStyle(AppTheme.booking)
-                    .frame(width: 40, height: 40)
-                    .background(AppTheme.bookingSoft, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Saved Addresses")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink.opacity(0.88))
-                    Text("\(store.savedAddresses.count)/3 addresses saved")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                Spacer()
-            }
-
-            ForEach(store.savedAddresses) { address in
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(address.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink.opacity(0.88))
-                        Text(address.detail)
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.muted)
-                            .lineLimit(2)
-                    }
-                    Spacer(minLength: 8)
-                    Button {
-                        store.useSavedAddress(address)
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(AppTheme.green)
-                    }
-                    .buttonStyle(.plain)
-                    Button {
-                        store.deleteSavedAddress(address)
-                    } label: {
-                        Image(systemName: "trash.fill")
-                            .foregroundStyle(AppTheme.booking)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(12)
-                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
-            }
-
-            if isAddingAddress {
-                VStack(spacing: 10) {
-                    addressField("Address title", text: $newAddressTitle)
-                    addressField("Full address", text: $newAddressDetail)
-                    HStack(spacing: 10) {
-                        Button("Cancel") {
-                            isAddingAddress = false
-                            newAddressTitle = ""
-                            newAddressDetail = ""
-                        }
-                        .outlineCTA()
-                        Button("Save Address") {
-                            let previousCount = store.savedAddresses.count
-                            store.addSavedAddress(title: newAddressTitle, detail: newAddressDetail)
-                            if store.savedAddresses.count > previousCount {
-                                isAddingAddress = false
-                                newAddressTitle = ""
-                                newAddressDetail = ""
-                            }
-                        }
-                        .roseCTA()
-                    }
-                }
-                .padding(12)
-                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else {
-                Button {
-                    newAddressTitle = "Address \(store.savedAddresses.count + 1)"
-                    newAddressDetail = store.profile.address
-                    isAddingAddress = true
-                } label: {
-                    Label("Add New Address", systemImage: "plus.circle.fill")
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(store.savedAddresses.count >= 3 ? AppTheme.muted : AppTheme.booking)
-                .frame(maxWidth: .infinity)
-                .frame(height: 42)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
-                .disabled(store.savedAddresses.count >= 3)
-            }
-        }
-        .androidCard(padding: 14, radius: 17, shadow: 1)
-    }
-
-    private func addressField(_ placeholder: String, text: Binding<String>) -> some View {
-        TextField(placeholder, text: text)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(AppTheme.ink)
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.line, lineWidth: 1))
     }
 }
 
@@ -2494,7 +1929,7 @@ struct CommercialFormOneScreen: View {
             FormField("Business / Company", text: $company)
             FormField("Contact Person", text: $contact)
             FormField("Mobile Number", text: $phone, keyboard: .phonePad)
-            InfoNote(text: "Your commercial request will be handled by the ApnaServo operations team.")
+            InfoNote(text: "This mirrors Android commercial form step one. Data stays local in this frontend build.")
             Button("Continue") {
                 store.navigate(.commercialFormTwo)
             }
@@ -2514,7 +1949,7 @@ struct CommercialFormTwoScreen: View {
             FormField("Site Address", text: $address)
             FormField("Work Scope", text: $scope)
             FormField("Preferred Inspection Time", text: $preferredTime)
-            InfoNote(text: "Inspection details will be saved when submitted.")
+            InfoNote(text: "Inspection request will be shared with the ApnaServo operations team.")
             Button("Submit Request") {
                 store.navigate(.commercialSubmitted)
             }
@@ -2713,7 +2148,7 @@ struct StatusChip: View {
 }
 
 func statusTitle(_ status: String) -> String {
-    switch displayStatusKey(status) {
+    switch status {
     case "pending": return "PENDING"
     case "accepted": return "ASSIGNED"
     case "on_the_way": return "ON WAY"
@@ -2728,25 +2163,11 @@ func statusTitle(_ status: String) -> String {
 }
 
 func statusColor(_ status: String) -> Color {
-    switch displayStatusKey(status) {
+    switch status {
     case "completed": return AppTheme.green
     case "accepted", "on_the_way", "arrived", "started": return AppTheme.blue
     case "amount_pending": return AppTheme.orange
     case "cancelled", "rejected": return AppTheme.muted
     default: return AppTheme.booking
-    }
-}
-
-private func displayStatusKey(_ status: String) -> String {
-    let clean = status.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-    switch clean {
-    case "assigned", "partner_assigned", "partner_accepted":
-        return "accepted"
-    case "work_in_progress", "in_progress", "service_started":
-        return "started"
-    case "sent_to_partner", "sent", "searching", "processing", "created", "new", "open", "no_partner":
-        return "pending"
-    default:
-        return clean
     }
 }

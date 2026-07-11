@@ -57,6 +57,16 @@ struct PartnerProfile: Codable, Hashable {
     var name = ""
     var phone = ""
     var email = ""
+    var dob = ""
+    var gender = ""
+    var address = ""
+    var city = AppConfig.defaultCity
+    var state = "Assam"
+    var pinCode = ""
+    var emergencyContactNumber = ""
+    var yearsOfExperience = 0
+    var workingAreas = ""
+    var languages = ""
     var photoURL = ""
     var faceVerified = false
     var online = true
@@ -221,6 +231,7 @@ struct PartnerNotificationItem: Identifiable, Codable, Hashable {
     var body: String
     var type: String
     var bookingId: String
+    var bookingCode: String
     var isRead: Bool
 
     init(from decoder: Decoder) throws {
@@ -230,7 +241,8 @@ struct PartnerNotificationItem: Identifiable, Codable, Hashable {
         body = c.string("body", "message", fallback: "Booking update received")
         type = c.string("type")
         bookingId = c.string("bookingId")
-        isRead = c.bool("read", "isRead")
+        bookingCode = c.string("bookingCode")
+        isRead = c.bool("read", "isRead") || !c.string("readAt").isEmpty
     }
 
     init(id: String, title: String, body: String, type: String, bookingId: String, isRead: Bool) {
@@ -239,6 +251,7 @@ struct PartnerNotificationItem: Identifiable, Codable, Hashable {
         self.body = body
         self.type = type
         self.bookingId = bookingId
+        self.bookingCode = ""
         self.isRead = isRead
     }
 }
@@ -251,6 +264,16 @@ struct PartnerProfileDTO: Decodable {
     let name: String?
     let phone: String?
     let email: String?
+    let dob: String?
+    let gender: String?
+    let address: String?
+    let city: String?
+    let state: String?
+    let pinCode: String?
+    let emergencyContactNumber: String?
+    let yearsOfExperience: Int?
+    let workingAreas: String?
+    let languages: String?
     let serviceCategory: [String]?
     let isOnline: Bool?
     let serviceRadiusKm: Int?
@@ -263,6 +286,16 @@ struct PartnerProfileDTO: Decodable {
         profile.name = name ?? profile.name
         profile.phone = phone ?? profile.phone
         profile.email = email ?? profile.email
+        profile.dob = dob ?? profile.dob
+        profile.gender = gender ?? profile.gender
+        profile.address = address ?? profile.address
+        profile.city = city ?? profile.city
+        profile.state = state ?? profile.state
+        profile.pinCode = pinCode ?? profile.pinCode
+        profile.emergencyContactNumber = emergencyContactNumber ?? profile.emergencyContactNumber
+        profile.yearsOfExperience = yearsOfExperience ?? profile.yearsOfExperience
+        profile.workingAreas = workingAreas ?? profile.workingAreas
+        profile.languages = languages ?? profile.languages
         profile.skills = Set((serviceCategory ?? []).compactMap(PartnerSkill.init(rawValue:)))
         if profile.skills.isEmpty { profile.skills = fallback.skills }
         profile.online = isOnline ?? profile.online

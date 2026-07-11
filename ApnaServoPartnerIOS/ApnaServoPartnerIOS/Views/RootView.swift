@@ -35,16 +35,22 @@ struct PartnerLoginView: View {
     @EnvironmentObject private var store: PartnerAppStore
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        ZStack {
+            AndroidAssetImage(name: "partner_login_bg", contentMode: .fill)
+                .ignoresSafeArea()
+                .opacity(0.22)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
+                    AndroidAssetImage(name: "apna_servo_logo")
+                        .frame(width: 132, height: 70)
                     Text("ApnaServo Partner")
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(AppTheme.roseDark)
-                    Text("Go online, receive bookings, complete jobs.")
+                    Text("Login Existing Partner")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(AppTheme.ink)
-                    Text("Firebase/Google sign-in hooks are ready. Temporary token can be saved in Profile after login.")
+                    Text("Go online, receive bookings, accept jobs, update service status and track earnings.")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -66,7 +72,7 @@ struct PartnerLoginView: View {
                     }
                     .primaryButton()
                     Button {
-                        store.infoMessage = "Add FirebaseAuth + GoogleSignIn SDK and connect this button to Google sign-in."
+                        store.infoMessage = "Google sign-in uses Firebase Auth when the Firebase and GoogleSignIn packages are added in Xcode."
                     } label: {
                         Label("Continue with Google", systemImage: "g.circle.fill")
                             .outlineButton()
@@ -75,6 +81,7 @@ struct PartnerLoginView: View {
                 .cardStyle()
             }
             .padding(18)
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum AppTheme {
     static let bg = Color(hex: 0xFFF7F5)
@@ -263,5 +264,22 @@ struct EmptyState: View {
         }
         .frame(maxWidth: .infinity)
         .cardStyle()
+    }
+}
+
+struct AndroidAssetImage: View {
+    let name: String
+    var extensionName = "png"
+    var contentMode: ContentMode = .fit
+
+    var body: some View {
+        if let url = Bundle.main.url(forResource: name, withExtension: extensionName, subdirectory: "ImportedAndroidAssets"),
+           let image = UIImage(contentsOfFile: url.path) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
+        } else {
+            Color.clear
+        }
     }
 }

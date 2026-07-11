@@ -280,22 +280,14 @@ struct BottomNav: View {
     var body: some View {
         HStack(spacing: 0) {
             nav("Home", "house.fill", .home)
-            nav("Bookings", "calendar", .bookings)
+            nav("Bookings", "list.bullet.rectangle.fill", .bookings)
             nav("Profile", "person.fill", .profile)
         }
-        .frame(height: 74)
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(
-            Color.white
-                .clipShape(TopRoundedRectangle(radius: 30))
-        )
-        .overlay(
-            TopRoundedRectangle(radius: 30)
-                .stroke(AppTheme.line, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.13), radius: 16, y: -5)
+        .frame(height: 80)
+        .padding(.horizontal, 12)
+        .background(Color.white)
+        .overlay(Rectangle().fill(AppTheme.line).frame(height: 1), alignment: .top)
+        .shadow(color: .black.opacity(0.12), radius: 16, y: -3)
     }
 
     private func nav(_ title: String, _ image: String, _ target: UserScreen) -> some View {
@@ -306,27 +298,14 @@ struct BottomNav: View {
                 Image(systemName: image)
                     .font(.system(size: 22, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 13, weight: store.screen == target ? .black : .medium))
+                    .font(.system(size: 12, weight: store.screen == target ? .bold : .regular))
             }
-            .foregroundStyle(store.screen == target ? AppTheme.rose : Color(hex: 0x858585))
-            .opacity(store.screen == target ? 1 : 0.9)
-            .offset(y: store.screen == target ? -2 : 0)
+            .foregroundStyle(store.screen == target ? AppTheme.rose : Color(hex: 0x707070))
+            .opacity(store.screen == target ? 1 : 0.76)
+            .offset(y: store.screen == target ? -6 : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct TopRoundedRectangle: Shape {
-    var radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: [.topLeft, .topRight],
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
     }
 }
 

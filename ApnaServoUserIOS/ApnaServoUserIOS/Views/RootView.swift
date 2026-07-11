@@ -9,6 +9,8 @@ struct RootView: View {
             UserAppView()
         }
         .task {
+            store.configureAppServices()
+            await store.refreshBookings()
             guard store.screen == .splash else { return }
             try? await Task.sleep(nanoseconds: 900_000_000)
             store.finishSplash()
@@ -180,28 +182,23 @@ struct TimeChoiceSheet: View {
             }
 
             ForEach(slots, id: \.self) { slot in
-                let unavailable = !store.isTimeSlotAvailable(slot)
                 Button {
-                    if !unavailable {
-                        store.chooseTime(slot)
-                    }
+                    store.chooseTime(slot)
                 } label: {
                     HStack {
                         Text(slot)
                             .font(.system(size: 15, weight: .semibold))
                         Spacer()
-                        Text(unavailable ? "Closed" : (slot == "10:00 AM - 12:00 PM" ? "Recommended" : "Available"))
+                        Text(slot == "10:00 AM - 12:00 PM" ? "Recommended" : "Available")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(unavailable ? AppTheme.muted.opacity(0.7) : (slot == "10:00 AM - 12:00 PM" ? AppTheme.green : AppTheme.muted))
-                        Image(systemName: unavailable ? "lock.fill" : (store.draft.time == slot ? "largecircle.fill.circle" : "circle"))
-                            .foregroundStyle(unavailable ? AppTheme.muted.opacity(0.6) : (store.draft.time == slot ? AppTheme.booking : AppTheme.muted))
+                            .foregroundStyle(slot == "10:00 AM - 12:00 PM" ? AppTheme.green : AppTheme.muted)
+                        Image(systemName: store.draft.time == slot ? "largecircle.fill.circle" : "circle")
+                            .foregroundStyle(store.draft.time == slot ? AppTheme.booking : AppTheme.muted)
                     }
-                    .foregroundStyle(unavailable ? AppTheme.muted : AppTheme.ink)
-                    .opacity(unavailable ? 0.58 : 1)
+                    .foregroundStyle(AppTheme.ink)
                     .androidCard(padding: 14, radius: 12, border: store.draft.time == slot ? AppTheme.booking : AppTheme.line)
                 }
                 .buttonStyle(.plain)
-                .disabled(unavailable)
             }
         }
         .padding(18)
@@ -260,17 +257,17 @@ struct LegalInformationSheet: View {
                     .font(.system(size: 24, weight: .bold))
                 Text("Privacy Policy")
                     .font(.system(size: 17, weight: .bold))
-                Text("ApnaServo keeps profile, address, booking and support details only for service fulfilment through the live platform.")
+                Text("ApnaServo keeps profile, address, booking and support details only for service fulfilment and live service updates.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
                 Text("Terms")
                     .font(.system(size: 17, weight: .bold))
-                Text("Final amount is confirmed only after partner inspection. No upfront payment is collected before service.")
+                Text("Final amount is confirmed after inspection. No upfront payment is collected before service completion.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
                 Text("Delete Account")
                     .font(.system(size: 17, weight: .bold))
-                Text("You can request account support or deletion through ApnaServo support. Requests are reviewed according to platform policy.")
+                Text("Account deletion UI is represented here. Backend wiring is intentionally not added in this frontend-only migration.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
             }

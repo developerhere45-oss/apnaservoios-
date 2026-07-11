@@ -42,12 +42,6 @@ struct BookingChatView: View {
             }
         }
         .background(AppTheme.bg)
-        .task(id: store.latestBooking?.id) {
-            while !Task.isCancelled {
-                await store.refreshBookingChat()
-                try? await Task.sleep(nanoseconds: 2_500_000_000)
-            }
-        }
     }
 }
 

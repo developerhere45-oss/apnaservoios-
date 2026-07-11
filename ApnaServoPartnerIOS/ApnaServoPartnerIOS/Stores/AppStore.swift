@@ -20,6 +20,8 @@ final class PartnerAppStore: ObservableObject {
     @Published var statementFrom = ""
     @Published var statementTo = ""
     @Published var aadhaarLast4 = ""
+    @Published var documentStatuses: [String: String] = [:]
+    @Published var uploadingDocumentType = ""
 
     private let api = APIClient()
     private let secureStore = SecureStore()
@@ -31,6 +33,9 @@ final class PartnerAppStore: ObservableObject {
     private let tokenKey = "firebase_id_token"
     private var refreshTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var backendToken: String {
+        authToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     init() {
         loadLocalState()
@@ -42,6 +47,19 @@ final class PartnerAppStore: ObservableObject {
     var activeBookings: [PartnerBooking] { bookings.filter(\.isActive) }
     var completedBookings: [PartnerBooking] { bookings.filter { $0.status == "completed" } }
     var totalEarnings: Int { completedBookings.reduce(0) { $0 + $1.amount } }
+    var todayEarnings: Int {
+        let calendar = Calendar.current
+        return completedBookings
+            .filter { calendar.isDate(Date(milliseconds: $0.completedAtMillis), inSameDayAs: Date()) }
+            .reduce(0) { $0 + $1.amount }
+    }
+    var monthEarnings: Int {
+        let calendar = Calendar.current
+        let now = Date()
+        return completedBookings
+            .filter { calendar.isDate(Date(milliseconds: $0.completedAtMillis), equalTo: now, toGranularity: .month) }
+            .reduce(0) { $0 + $1.amount }
+    }
 
     func loadLocalState() {
         if let data = defaults.data(forKey: profileKey),
@@ -83,7 +101,7 @@ final class PartnerAppStore: ObservableObject {
 
     func completeLogin() {
         guard profile.isValid else {
-            errorMessage = "Enter your name, a valid 10-digit phone number, and at least one service."
+            errorMessage = "Name, 10 digit phone, aur at least one service required hai."
             return
         }
         persistProfile()
@@ -92,6 +110,7 @@ final class PartnerAppStore: ObservableObject {
             _ = await notificationService.requestPermission()
             fcmToken = notificationService.fcmToken
             defaults.set(fcmToken, forKey: "partner_fcm_token")
+            await saveFCMTokenIfNeeded()
             await syncPartnerProfile()
             await refreshAll()
         }
@@ -113,7 +132,16 @@ final class PartnerAppStore: ObservableObject {
     func syncPartnerProfile() async {
         guard profile.isValid else { return }
         do {
-            try await api.upsertPartnerProfile(profile, fcmToken: fcmToken, token: authToken)
+            try await api.upsertPartnerProfile(profile, fcmToken: fcmToken, token: backendToken)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func saveFCMTokenIfNeeded() async {
+        guard !fcmToken.isEmpty else { return }
+        do {
+            try await api.saveFCMToken(fcmToken, token: backendToken)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -121,7 +149,7 @@ final class PartnerAppStore: ObservableObject {
 
     func fetchRemoteProfile() async {
         do {
-            profile = try await api.fetchPartnerProfile(current: profile, token: authToken)
+            profile = try await api.fetchPartnerProfile(current: profile, token: backendToken)
             persistProfile()
         } catch {
             errorMessage = error.localizedDescription
@@ -133,7 +161,7 @@ final class PartnerAppStore: ObservableObject {
         persistProfile()
         Task {
             do {
-                try await api.setOnline(profile.online, token: authToken)
+                try await api.setOnline(profile.online, token: backendToken)
                 await syncPartnerProfile()
             } catch {
                 errorMessage = error.localizedDescription
@@ -148,7 +176,7 @@ final class PartnerAppStore: ObservableObject {
 
     func fetchBookings() async {
         do {
-            let live = try await api.fetchPartnerBookings(token: authToken)
+            let live = try await api.fetchPartnerBookings(token: backendToken)
             mergeBookings(live)
         } catch {
             errorMessage = error.localizedDescription
@@ -157,7 +185,7 @@ final class PartnerAppStore: ObservableObject {
 
     func fetchNotifications() async {
         do {
-            notifications = try await api.fetchNotifications(token: authToken)
+            notifications = try await api.fetchNotifications(token: backendToken)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -165,7 +193,7 @@ final class PartnerAppStore: ObservableObject {
 
     func markNotificationRead(_ item: PartnerNotificationItem) {
         Task {
-            await api.markNotificationRead(item.id, token: authToken)
+            await api.markNotificationRead(item.id, token: backendToken)
             if let index = notifications.firstIndex(where: { $0.id == item.id }) {
                 notifications[index].isRead = true
             }
@@ -182,7 +210,7 @@ final class PartnerAppStore: ObservableObject {
         loading = true
         Task {
             do {
-                let accepted = try await api.acceptBooking(booking.id, token: authToken)
+                let accepted = try await api.acceptBooking(booking.id, token: backendToken)
                 upsertBooking(accepted)
                 selectedBooking = accepted
                 screen = .detail
@@ -199,7 +227,7 @@ final class PartnerAppStore: ObservableObject {
         loading = true
         Task {
             do {
-                try await api.rejectBooking(booking.id, token: authToken)
+                try await api.rejectBooking(booking.id, token: backendToken)
                 var rejected = booking
                 rejected.status = "rejected"
                 upsertBooking(rejected)
@@ -219,7 +247,7 @@ final class PartnerAppStore: ObservableObject {
         Task {
             let location = await makeLocationPayload(bookingId: booking.id)
             do {
-                let updated = try await api.updateBookingStatus(booking.id, status: status, finalAmount: booking.amount, location: location, token: authToken)
+                let updated = try await api.updateBookingStatus(booking.id, status: status, finalAmount: booking.amount, location: location, token: backendToken)
                 booking = updated
                 upsertBooking(updated)
                 selectedBooking = booking
@@ -238,7 +266,7 @@ final class PartnerAppStore: ObservableObject {
         Task {
             let location = await makeLocationPayload(bookingId: booking.id)
             do {
-                try await api.reportNoResponse(bookingId: booking.id, reason: reason, location: location, token: authToken)
+                try await api.reportNoResponse(bookingId: booking.id, reason: reason, location: location, token: backendToken)
                 infoMessage = "No-response report submitted."
             } catch {
                 errorMessage = error.localizedDescription
@@ -253,7 +281,7 @@ final class PartnerAppStore: ObservableObject {
 
     func openAppleMaps(_ booking: PartnerBooking) {
         let url = URL(string: "http://maps.apple.com/?daddr=\(booking.lat),\(booking.lng)&dirflg=d")!
-        UIApplication.shared.open(url)
+        openExternalURL(url)
     }
 
     func callCustomer(_ booking: PartnerBooking) {
@@ -262,8 +290,8 @@ final class PartnerAppStore: ObservableObject {
             errorMessage = "Customer phone hidden or unavailable."
             return
         }
-        Task { await api.createCallLog(bookingId: booking.id, action: "start", reason: "", token: authToken) }
-        UIApplication.shared.open(url)
+        Task { await api.createCallLog(bookingId: booking.id, action: "start", reason: "", token: backendToken) }
+        openExternalURL(url)
     }
 
     func openBookingChat(_ booking: PartnerBooking) {
@@ -275,8 +303,8 @@ final class PartnerAppStore: ObservableObject {
     func loadBookingChat() async {
         guard let booking = selectedBooking else { return }
         do {
-            messages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: authToken)
-            await api.markBookingChatSeen(bookingId: booking.id, token: authToken)
+            messages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: backendToken)
+            await api.markBookingChatSeen(bookingId: booking.id, token: backendToken)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -289,11 +317,11 @@ final class PartnerAppStore: ObservableObject {
         messages.append(local)
         Task {
             do {
-                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: authToken)
+                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: backendToken)
                 if let index = messages.firstIndex(where: { $0.id == local.id }) {
                     messages[index] = sent
                 }
-                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: authToken)
+                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: backendToken)
             } catch {
                 if let index = messages.firstIndex(where: { $0.id == local.id }) {
                     messages[index].deliveryStatus = "failed"
@@ -314,17 +342,73 @@ final class PartnerAppStore: ObservableObject {
     func sendSupportMessage(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
-        supportMessages.append(ChatMessage(id: UUID().uuidString, bookingId: "support", bookingCode: "", senderRole: "partner", senderName: "You", message: clean, clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
-        supportMessages.append(ChatMessage(id: UUID().uuidString, bookingId: "support", bookingCode: "", senderRole: "support", senderName: "Partner Support", message: supportReply(for: clean), clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
+        let clientMessageId = "IOSSUPPORT\(Int(Date().timeIntervalSince1970 * 1000))"
+        let local = ChatMessage(id: clientMessageId, bookingId: "support", bookingCode: "", senderRole: "partner", senderName: "You", message: clean, clientMessageId: clientMessageId, deliveryStatus: "queued", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        supportMessages.append(local)
+        Task {
+            do {
+                try await api.createPartnerSupportTicket(category: supportType, message: clean, clientMessageId: clientMessageId, attachmentURL: "", token: backendToken)
+                if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
+                    supportMessages[index].deliveryStatus = "sent"
+                }
+                infoMessage = "Support request submitted."
+            } catch {
+                if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
+                    supportMessages[index].deliveryStatus = "failed"
+                }
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     func submitVerification() {
+        guard aadhaarLast4.isEmpty || aadhaarLast4.range(of: #"^\d{4}$"#, options: .regularExpression) != nil else {
+            errorMessage = "Enter the last 4 digits of Aadhaar."
+            return
+        }
         Task {
             do {
-                try await api.submitVerification(aadhaarLast4: aadhaarLast4, selfieURL: profile.photoURL, faceVerified: true, selfieVerified: true, token: authToken)
-                profile.faceVerified = true
+                try await api.submitVerification(aadhaarLast4: aadhaarLast4, selfieURL: profile.photoURL, faceVerified: false, selfieVerified: false, token: backendToken)
                 persistProfile()
-                infoMessage = "Verification submitted."
+                infoMessage = "Verification submitted for review."
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func uploadDocument(documentType: String, fileURL: URL) {
+        Task {
+            let scoped = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if scoped { fileURL.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+                let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
+                guard size <= AppConfig.maxDocumentBytes else {
+                    errorMessage = "Document must be under 4 MB."
+                    return
+                }
+                uploadingDocumentType = documentType
+                documentStatuses[documentType] = "Uploading"
+                try await api.uploadDocument(documentType: documentType, fileURL: fileURL, aadhaarLast4: aadhaarLast4, token: backendToken)
+                documentStatuses[documentType] = "Uploaded"
+                infoMessage = "\(documentType) uploaded for verification."
+            } catch {
+                documentStatuses[documentType] = "Failed"
+                errorMessage = error.localizedDescription
+            }
+            uploadingDocumentType = ""
+        }
+    }
+
+    func requestAccountDeletion(reason: String = "Partner requested account deletion from iOS app") {
+        Task {
+            do {
+                try await api.requestAccountDeletion(reason: reason, token: backendToken)
+                logout()
+                infoMessage = "Account deletion request submitted."
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -334,10 +418,10 @@ final class PartnerAppStore: ObservableObject {
     func downloadStatement() {
         Task {
             do {
-                let data = try await api.downloadStatement(from: statementFrom, to: statementTo, token: authToken)
+                let data = try await api.downloadStatement(from: statementFrom, to: statementTo, token: backendToken)
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("apnaservo-job-statement.pdf")
                 try data.write(to: url)
-                UIApplication.shared.open(url)
+                openExternalURL(url)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -368,7 +452,7 @@ final class PartnerAppStore: ObservableObject {
         guard profile.online else { return }
         let payload = await makeLocationPayload(bookingId: activeBookings.first?.id ?? "")
         do {
-            try await api.updateLocation(payload, token: authToken)
+            try await api.updateLocation(payload, token: backendToken)
             profile.lat = payload.lat
             profile.lng = payload.lng
             persistProfile()
@@ -418,17 +502,18 @@ final class PartnerAppStore: ObservableObject {
         if persist { persistBookings() }
     }
 
-    private func supportReply(for text: String) -> String {
-        let lower = text.lowercased()
-        if lower.contains("payment") || lower.contains("earning") {
-            return "Earnings are calculated from completed jobs. Use the statement date filter to download a PDF."
+    private func openExternalURL(_ url: URL) {
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    }
+
+}
+
+private extension Date {
+    init(milliseconds: Int64) {
+        if milliseconds > 0 {
+            self.init(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+        } else {
+            self.init(timeIntervalSince1970: 0)
         }
-        if lower.contains("radius") || lower.contains("area") || lower.contains("location") {
-            return "Update service area and radius in My Services, then save. Location heartbeat is sent while Online mode is on."
-        }
-        if lower.contains("booking") || lower.contains("request") {
-            return "Keep Online ON. Requests matching your service category, city, and radius will appear on the dashboard."
-        }
-        return "Support request recorded. The partner team will follow up."
     }
 }

@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import CoreLocation
 import Security
 import UIKit
 import UserNotifications
@@ -16,7 +17,7 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingToken:
-            return "Authentication token missing."
+            return "Firebase ID token missing. Add Firebase iOS Auth or paste a temporary token in Profile."
         case .invalidURL:
             return "Backend URL invalid."
         case .badResponse(let message):
@@ -29,6 +30,8 @@ final class APIClient {
     private var activeBaseURL: URL
     private let baseURLs: [URL]
     private let session: URLSession
+    private let secureStore = SecureStore()
+    private let localDeviceToken = "local-device-auth"
 
     init(baseURLs: [URL] = [AppConfig.apiBaseURL], session: URLSession = .shared) {
         self.baseURLs = baseURLs
@@ -67,15 +70,20 @@ final class APIClient {
         return envelope.notifications ?? []
     }
 
+    func fetchUserBookings(token: String) async throws -> [Booking] {
+        let envelope: BookingEnvelope = try await request(path: "/bookings/user", token: token)
+        return envelope.bookings ?? []
+    }
+
     func markNotificationRead(_ notificationId: String, token: String) async {
         guard !notificationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let path = "/notifications/\(notificationId)/read?role=user"
         let _: EmptyResponse? = try? await request(path: path, method: "PATCH", token: token, body: [:])
     }
 
-    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, bookingCode: String, fcmToken: String, token: String) async throws -> Booking {
+    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fcmToken: String, token: String) async throws -> Booking {
+        let amount = service.price
         let body: [String: Any] = [
-            "bookingCode": bookingCode,
             "serviceCategory": service.id,
             "serviceName": service.name,
             "serviceTier": draft.tier.rawValue,
@@ -89,6 +97,8 @@ final class APIClient {
             "date": draft.date,
             "time": draft.time,
             "slot": draft.slot,
+            "defaultAmount": amount,
+            "price": amount,
             "userName": profile.name,
             "customerName": profile.name,
             "userPhone": profile.phone,
@@ -98,15 +108,20 @@ final class APIClient {
             "userFcmToken": fcmToken
         ]
         let envelope: BookingEnvelope = try await request(path: "/bookings", method: "POST", token: token, body: body)
-        if let booking = envelope.booking {
-            return booking
-        }
-        throw APIError.badResponse("Booking was not created by the backend.")
-    }
-
-    func fetchUserBookings(token: String) async throws -> [Booking] {
-        let envelope: BookingEnvelope = try await request(path: "/bookings/user", token: token)
-        return envelope.bookings ?? []
+        return envelope.booking ?? Booking(
+            id: "local-\(UUID().uuidString)",
+            bookingCode: "",
+            serviceCategory: service.id,
+            serviceName: service.name,
+            issue: draft.problem,
+            address: draft.address,
+            slot: draft.slot,
+            customerName: profile.name,
+            userPhone: profile.phone,
+            defaultAmount: amount,
+            lat: draft.lat,
+            lng: draft.lng
+        )
     }
 
     func getBooking(_ bookingId: String, token: String) async throws -> Booking {
@@ -124,23 +139,17 @@ final class APIClient {
             token: token,
             body: ["status": status, "finalAmount": finalAmount]
         )
-        if let booking = envelope.booking {
-            return booking
-        }
-        return try await getBooking(bookingId, token: token)
+        return envelope.booking ?? try await getBooking(bookingId, token: token)
     }
 
-    func submitDirectPayment(_ bookingId: String, token: String) async throws -> Booking {
+    func submitDirectPayment(bookingId: String, token: String) async throws -> Booking {
         let envelope: BookingEnvelope = try await request(
             path: "/bookings/\(bookingId)/payment-submitted",
             method: "POST",
             token: token,
             body: [:]
         )
-        if let booking = envelope.booking {
-            return booking
-        }
-        return try await getBooking(bookingId, token: token)
+        return envelope.booking ?? try await getBooking(bookingId, token: token)
     }
 
     func counterOfferQuote(_ bookingId: String, amount: Int, message: String, token: String) async throws -> Booking {
@@ -150,10 +159,7 @@ final class APIClient {
             token: token,
             body: ["amount": amount, "message": message]
         )
-        if let booking = envelope.booking {
-            return booking
-        }
-        return try await getBooking(bookingId, token: token)
+        return envelope.booking ?? try await getBooking(bookingId, token: token)
     }
 
     func submitReview(bookingId: String, rating: Int, comment: String, token: String) async throws {
@@ -207,21 +213,20 @@ final class APIClient {
         token: String,
         body: [String: Any]? = nil
     ) async throws -> T {
+        let resolvedToken = normalizedToken(token)
+
         var lastError: Error?
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
         for baseURL in ordered {
             do {
-                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: token, body: body)
+                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: resolvedToken, body: body)
                 activeBaseURL = baseURL
                 return value
             } catch {
                 lastError = error
             }
         }
-        if let lastError = lastError {
-            throw lastError
-        }
-        throw APIError.badResponse("Backend not reachable.")
+        throw lastError ?? APIError.badResponse("Backend not reachable.")
     }
 
     private func execute<T: Decodable>(
@@ -235,8 +240,12 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 14
-        applyAuthHeaders(to: &request, token: token)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if usesLocalDeviceAuth(token) {
+            request.setValue(localDevUid(), forHTTPHeaderField: "X-ApnaServo-Dev-Uid")
+            request.setValue("user", forHTTPHeaderField: "X-ApnaServo-Dev-Role")
+        }
 
         if let body {
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -259,6 +268,26 @@ final class APIClient {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
+    private func normalizedToken(_ token: String) -> String {
+        let clean = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? localDeviceToken : clean
+    }
+
+    private func usesLocalDeviceAuth(_ token: String) -> Bool {
+        token == localDeviceToken || token == "local-development"
+    }
+
+    private func localDevUid() -> String {
+        let key = "ios_user_dev_uid"
+        let saved = secureStore.string(for: key)
+        if !saved.isEmpty {
+            return saved
+        }
+        let generated = "local-ios-user-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
+        secureStore.set(generated, for: key)
+        return generated
+    }
+
     private func makeURL(baseURL: URL, path: String) throws -> URL {
         let parts = path.split(separator: "?", maxSplits: 1).map(String.init)
         let cleanPath = parts[0].trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -273,30 +302,6 @@ final class APIClient {
             return finalURL
         }
         return url
-    }
-
-    private func applyAuthHeaders(to request: inout URLRequest, token: String) {
-        let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanToken.isEmpty {
-            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
-            return
-        }
-        #if DEBUG
-        request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
-        request.setValue("user", forHTTPHeaderField: "x-apnaservo-dev-role")
-        #endif
-    }
-
-    private func deviceAuthUID() -> String {
-        let key = "apnaservo.ios.user.device.uid"
-        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
-            return existing
-        }
-        let rawId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        let cleanId = rawId.replacingOccurrences(of: "-", with: "").lowercased()
-        let uid = "local-user-ios-\(cleanId)"
-        UserDefaults.standard.set(uid, forKey: key)
-        return uid
     }
 
     private func httpError(code: Int, data: Data) -> String {
@@ -378,35 +383,32 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var lastCoordinate = CLLocationCoordinate2D(
-        latitude: AppConfig.defaultLatitude,
-        longitude: AppConfig.defaultLongitude
-    )
+    private var continuation: CheckedContinuation<CLLocationCoordinate2D, Never>?
 
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
-        if manager.authorizationStatus == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        }
-        manager.startUpdatingLocation()
     }
 
     func currentCoordinate() async -> CLLocationCoordinate2D {
-        lastCoordinate
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let coordinate = locations.last?.coordinate {
-            lastCoordinate = coordinate
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            if manager.authorizationStatus == .notDetermined {
+                manager.requestWhenInUseAuthorization()
+            }
+            manager.requestLocation()
         }
     }
 
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let coordinate = locations.last?.coordinate ?? CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
+        continuation?.resume(returning: coordinate)
+        continuation = nil
+    }
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        lastCoordinate = CLLocationCoordinate2D(
-            latitude: AppConfig.defaultLatitude,
-            longitude: AppConfig.defaultLongitude
-        )
+        continuation?.resume(returning: CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude))
+        continuation = nil
     }
 }

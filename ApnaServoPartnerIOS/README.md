@@ -1,6 +1,6 @@
 # ApnaServoPartnerIOS
 
-Native SwiftUI partner app recreated from the Android Partner App.
+Native SwiftUI Partner App recreated from the Android Partner App.
 
 ## Open
 
@@ -14,17 +14,18 @@ Open `ApnaServoPartnerIOS.xcodeproj` on macOS in Xcode, select the `ApnaServoPar
 - Partner GPS heartbeat and Apple Maps navigation
 - Bookings, earnings, statement PDF download
 - Notifications, profile tools, documents, verification, services/radius/area
-- Protected call/no-response report hooks
+- Protected call/no-response reporting
 - Booking chat and partner support chat
 - URLSession API calls matching Android endpoints
 - UserDefaults + Keychain-style storage
-- Imported Android raster assets in `ImportedAndroidAssets`
+- Imported Android raster assets bundled in `ImportedAndroidAssets`
 
-## Required Config
+## Xcode Setup
 
-- Add `GoogleService-Info.plist`.
-- Add Firebase iOS packages and connect Firebase Auth token to `PartnerAppStore.authToken`.
-- Enable APNs/push notification capability.
-- Add Socket.IO Swift package for native realtime events.
-- Add Vision/ML Kit equivalent if production-grade liveness detection is required.
-- Add PhotosUI/DocumentPicker UI to call `APIClient.uploadDocument`.
+- Add `GoogleService-Info.plist` before enabling Firebase Auth/Messaging.
+- Add Firebase iOS packages if push notifications and automatic Firebase ID tokens are required.
+- Enable APNs/push notification capability for production booking alerts.
+- Set the signing team on the `ApnaServoPartnerIOS` target.
+- Backend base URL is in `ApnaServoPartnerIOS/App/AppConfig.swift`.
+
+This Windows workspace cannot run `xcodebuild`; open the project on macOS and build from Xcode.

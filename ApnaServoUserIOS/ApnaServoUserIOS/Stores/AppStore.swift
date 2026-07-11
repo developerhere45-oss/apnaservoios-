@@ -41,10 +41,6 @@ final class UserAppStore: ObservableObject {
         ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
     ]
     @Published var notifications: [AppNotificationItem] = []
-    @Published var savedAddresses: [SavedAddress] = [
-        SavedAddress(title: "Home", detail: "House 12, Ganeshguri, Guwahati, Assam 781006"),
-        SavedAddress(title: "Work", detail: "Dispur, Guwahati, Assam")
-    ]
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
     @Published var loginMode = "Phone"
@@ -55,20 +51,16 @@ final class UserAppStore: ObservableObject {
     @Published var showLegalSheet = false
     @Published var paymentInfoExpanded = false
     @Published var aboutInfoExpanded = false
-    @Published var shouldFocusServiceSearch = false
+    @Published var isBookingSubmitting = false
     @Published var selectedCommercialServiceTitle = "Commercial AC Service"
     @Published var selectedCommercialServiceId = "ac"
 
     let services = ServiceCatalog.services
     let categories = ServiceCatalog.categories
     private let api = APIClient()
+    private let secureStore = SecureStore()
     private let notificationService = AppNotificationService()
-    private let authToken = ""
-    private var bookingSyncTask: Task<Void, Never>?
-
-    init() {
-        notificationService.configure()
-    }
+    private var bookingPollingTask: Task<Void, Never>?
 
     var isLoggedIn: Bool {
         !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -79,7 +71,7 @@ final class UserAppStore: ObservableObject {
     }
 
     var activeBookings: [Booking] {
-        bookings.filter { !["completed", "cancelled", "rejected"].contains($0.progressStatus) }
+        bookings.filter { !["completed", "cancelled", "rejected"].contains($0.status) }
     }
 
     func finishSplash() {
@@ -121,20 +113,14 @@ final class UserAppStore: ObservableObject {
         navigate(.startupLocation, remember: false)
         Task {
             await syncUserProfile()
-            await loadLiveBookings()
+            await refreshBookings()
         }
-        startLiveBookingSync()
     }
 
     func finishLocationGate() {
         profile.lat = AppConfig.defaultLatitude
         profile.lng = AppConfig.defaultLongitude
         navigate(.home, remember: false)
-        Task {
-            await syncUserProfile()
-            await loadLiveBookings()
-        }
-        startLiveBookingSync()
     }
 
     func openService(_ service: ServiceItem) {
@@ -146,11 +132,6 @@ final class UserAppStore: ObservableObject {
         if let category {
             activeCategory = category
         }
-        navigate(.services)
-    }
-
-    func openServiceSearch() {
-        shouldFocusServiceSearch = true
         navigate(.services)
     }
 
@@ -193,28 +174,12 @@ final class UserAppStore: ObservableObject {
 
     func chooseDate(_ value: String) {
         draft.date = value
-        if !draft.time.isEmpty && !isTimeSlotAvailable(draft.time) {
-            draft.time = ""
-            toastMessage = "Past time slots are closed for today."
-        }
         showDateSheet = false
     }
 
     func chooseTime(_ value: String) {
-        guard isTimeSlotAvailable(value) else {
-            toastMessage = "This time slot is no longer available."
-            return
-        }
         draft.time = value
         showTimeSheet = false
-    }
-
-    func isTimeSlotAvailable(_ slot: String) -> Bool {
-        guard draft.date.hasPrefix("Today") else { return true }
-        guard let slotStart = Self.slotStartMinutes(slot) else { return true }
-        let components = Calendar.current.dateComponents([.hour, .minute], from: Date())
-        let nowMinutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)
-        return slotStart > nowMinutes
     }
 
     func continueToConfirm() {
@@ -244,26 +209,30 @@ final class UserAppStore: ObservableObject {
     }
 
     func confirmBooking() {
-        let bookingCode = makeBookingCode()
+        guard !isBookingSubmitting else { return }
+        isBookingSubmitting = true
         let issue = draft.problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Service request - \(selectedService.name)"
             : "Service request - \(draft.problem)"
+        var networkDraft = draft
+        networkDraft.problem = issue
+        networkDraft.address = bookingAddressPreview()
         let booking = Booking(
-            id: bookingCode,
-            bookingCode: bookingCode,
+            id: "AS\(Int(Date().timeIntervalSince1970))",
+            bookingCode: "AS\(Int(Date().timeIntervalSince1970) % 100000)",
             serviceCategory: selectedService.id,
             serviceName: selectedService.name,
             issue: issue,
-            address: bookingAddressPreview(),
-            slot: "\(draft.date), \(draft.time)",
+            address: networkDraft.address,
+            slot: networkDraft.slot,
             status: "pending",
             partnerName: "",
             partnerPhone: "",
             customerName: profile.name.isEmpty ? "ApnaServo Customer" : profile.name,
             userPhone: profile.phone,
-            defaultAmount: 0,
-            lat: draft.lat,
-            lng: draft.lng
+            defaultAmount: selectedService.price,
+            lat: networkDraft.lat,
+            lng: networkDraft.lng
         )
         latestBooking = booking
         upsertBooking(booking)
@@ -272,34 +241,75 @@ final class UserAppStore: ObservableObject {
             ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat will be available after a partner is assigned.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
         ]
         navigate(.bookingConfirmed)
+        let service = selectedService
+        let customer = profile
         Task {
-            await submitBookingToBackend(service: selectedService, draft: draft, profile: profile, bookingCode: bookingCode, fallbackId: booking.id)
-            startLiveBookingSync()
+            do {
+                let liveBooking = try await api.createBooking(
+                    service: service,
+                    draft: networkDraft,
+                    profile: customer,
+                    fcmToken: notificationService.fcmToken,
+                    token: apiToken
+                )
+                latestBooking = liveBooking
+                upsertBooking(liveBooking)
+                addNotification(title: "Booking sent", body: "\(liveBooking.displayId) is now live for nearby partners.", type: "booking", bookingId: liveBooking.id)
+                startBookingPolling()
+            } catch {
+                toastMessage = "Booking could not reach the live backend. Please retry from booking status."
+            }
+            isBookingSubmitting = false
         }
+    }
+
+    func assignPartner() {
+        guard var booking = latestBooking else { return }
+        booking.status = "accepted"
+        booking.partnerName = "Rahul Kumar"
+        latestBooking = booking
+        upsertBooking(booking)
+        addNotification(title: "Partner assigned", body: "\(booking.partnerName) accepted \(booking.displayId). Track live status now.", type: "partner_assigned", bookingId: booking.id)
+        bookingChatMessages = [
+            ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat directly with Rahul Kumar. Keep payments and service details inside ApnaServo.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        ]
     }
 
     func openTrack(_ booking: Booking? = nil) {
         if let booking {
             latestBooking = booking
         }
+        startBookingPolling()
         navigate(.track)
     }
 
-    func approveAmount() {
-        guard let booking = latestBooking else { return }
-        guard booking.amount > 0 else {
-            toastMessage = "Final amount has not been shared yet."
-            return
+    func advanceBookingStatus() {
+        guard var booking = latestBooking else { return }
+        let flow = ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"]
+        let currentIndex = flow.firstIndex(of: booking.status) ?? 0
+        let next = flow[min(currentIndex + 1, flow.count - 1)]
+        booking.status = next
+        if next == "amount_pending" {
+            booking.finalAmount = max(booking.defaultAmount, 699)
+            booking.quoteStatus = "pending_customer"
         }
+        latestBooking = booking
+        upsertBooking(booking)
+    }
+
+    func approveAmount() {
+        guard var booking = latestBooking else { return }
+        booking.quoteStatus = "payment_submitted"
+        latestBooking = booking
+        upsertBooking(booking)
+        toastMessage = "Payment sent for partner verification."
         Task {
             do {
-                let updated = try await api.submitDirectPayment(booking.id, token: authToken)
-                latestBooking = updated
-                upsertBooking(updated)
-                toastMessage = "Payment submitted. Waiting for partner verification."
-                await refreshLiveBookings()
+                let live = try await api.submitDirectPayment(bookingId: booking.id, token: apiToken)
+                latestBooking = live
+                upsertBooking(live)
             } catch {
-                toastMessage = "Payment could not be submitted. Please try again."
+                toastMessage = "Payment update could not be sent. Please try again."
             }
         }
     }
@@ -310,29 +320,12 @@ final class UserAppStore: ObservableObject {
         }
         guard latestBooking != nil else { return }
         navigate(.bookingChat)
-        Task { await refreshBookingChat() }
     }
 
     func sendBookingChat(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let booking = latestBooking, !clean.isEmpty else { return }
-        let local = ChatMessage.local(text: clean, booking: booking)
-        bookingChatMessages.append(local)
-        Task {
-            do {
-                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: authToken)
-                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
-                    bookingChatMessages[index] = sent
-                } else {
-                    bookingChatMessages.append(sent)
-                }
-                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: authToken)
-            } catch {
-                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
-                    bookingChatMessages[index].deliveryStatus = "retry"
-                }
-            }
-        }
+        bookingChatMessages.append(ChatMessage.local(text: clean, booking: booking))
     }
 
     func sendSupportMessage(_ text: String) {
@@ -367,7 +360,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func logout() {
-        stopLiveBookingSync()
+        stopBookingPolling()
         profile = UserProfile()
         latestBooking = nil
         bookings = []
@@ -375,35 +368,53 @@ final class UserAppStore: ObservableObject {
         screen = .login
     }
 
-    func addSavedAddressFromCurrentProfile() {
-        addSavedAddress(title: savedAddresses.isEmpty ? "Home" : "Address \(savedAddresses.count + 1)", detail: currentAddressForSaving())
-    }
-
-    func addSavedAddress(title: String, detail: String) {
-        guard savedAddresses.count < 3 else {
-            toastMessage = "You can save up to 3 addresses."
-            return
+    func configureAppServices() {
+        notificationService.configure()
+        Task {
+            _ = await notificationService.requestPermission()
         }
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard cleanDetail.count >= 8 else {
-            toastMessage = "Add a complete address before saving."
-            return
+    }
+
+    func refreshBookings() async {
+        do {
+            let liveBookings = try await api.fetchUserBookings(token: apiToken)
+            bookings = liveBookings
+            if let current = latestBooking,
+               let updated = liveBookings.first(where: { $0.id == current.id || $0.bookingCode == current.bookingCode }) {
+                latestBooking = updated
+            } else if latestBooking == nil {
+                latestBooking = liveBookings.first { !["completed", "cancelled", "rejected"].contains($0.status) }
+            }
+        } catch {
+            // Keep local cached bookings if the network is temporarily unavailable.
         }
-        savedAddresses.append(SavedAddress(title: cleanTitle.isEmpty ? "Address \(savedAddresses.count + 1)" : cleanTitle, detail: cleanDetail))
-        toastMessage = "Address saved."
     }
 
-    func deleteSavedAddress(_ address: SavedAddress) {
-        savedAddresses.removeAll { $0.id == address.id }
-        toastMessage = "Address deleted."
+    func refreshLatestBooking() async {
+        guard let booking = latestBooking else { return }
+        do {
+            let live = try await api.getBooking(booking.id, token: apiToken)
+            latestBooking = live
+            upsertBooking(live)
+        } catch {
+            await refreshBookings()
+        }
     }
 
-    func useSavedAddress(_ address: SavedAddress) {
-        addressMode = .manual
-        draft.address = address.detail
-        draft.hasLocation = true
-        toastMessage = "\(address.title) selected."
+    func startBookingPolling() {
+        bookingPollingTask?.cancel()
+        guard latestBooking != nil else { return }
+        bookingPollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshLatestBooking()
+                try? await Task.sleep(nanoseconds: AppConfig.bookingStatusRefreshSeconds)
+            }
+        }
+    }
+
+    func stopBookingPolling() {
+        bookingPollingTask?.cancel()
+        bookingPollingTask = nil
     }
 
     func bookingAddressPreview() -> String {
@@ -419,60 +430,24 @@ final class UserAppStore: ObservableObject {
         return parts.joined(separator: ", ")
     }
 
-    private func currentAddressForSaving() -> String {
-        let draftAddress = bookingAddressPreview()
-        if draftAddress.count >= 8 && !draftAddress.lowercased().contains("location will") {
-            return draftAddress
-        }
-        if !profile.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return profile.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return "Guwahati, Assam"
-    }
-
-    func startLiveBookingSync() {
-        guard isLoggedIn else { return }
-        bookingSyncTask?.cancel()
-        bookingSyncTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.refreshLiveBookings()
-                try? await Task.sleep(nanoseconds: AppConfig.bookingStatusRefreshSeconds)
-            }
-        }
-    }
-
-    func stopLiveBookingSync() {
-        bookingSyncTask?.cancel()
-        bookingSyncTask = nil
-    }
-
-    func refreshLiveBookings() async {
-        await loadLiveBookings()
-    }
-
-    func refreshBookingChat() async {
-        guard let booking = latestBooking else { return }
-        do {
-            let messages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: authToken)
-            let pendingLocalMessages = bookingChatMessages.filter { message in
-                message.bookingId == booking.id && ["queued", "retry"].contains(message.deliveryStatus)
-            }
-            let backendClientIds = Set(messages.map(\.clientMessageId).filter { !$0.isEmpty })
-            let mergedPending = pendingLocalMessages.filter { message in
-                message.clientMessageId.isEmpty || !backendClientIds.contains(message.clientMessageId)
-            }
-            bookingChatMessages = (messages + mergedPending).sorted { $0.createdAtMillis < $1.createdAtMillis }
-            await api.markBookingChatSeen(bookingId: booking.id, token: authToken)
-        } catch {
-            // Keep queued/local messages visible if the network is temporarily unavailable.
-        }
-    }
-
     private func upsertBooking(_ booking: Booking) {
         if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
             bookings[index] = booking
         } else {
             bookings.insert(booking, at: 0)
+        }
+    }
+
+    private var apiToken: String {
+        let saved = secureStore.string(for: "user_api_token")
+        return saved.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func syncUserProfile() async {
+        do {
+            try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: apiToken)
+        } catch {
+            // Login remains usable; the next booking write will also carry user details.
         }
     }
 
@@ -491,73 +466,6 @@ final class UserAppStore: ObservableObject {
         )
     }
 
-    private func makeBookingCode() -> String {
-        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
-        let random = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(6).uppercased()
-        return "AS\(timestamp)\(random)"
-    }
-
-    private func syncUserProfile() async {
-        do {
-            try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: authToken)
-        } catch {
-            await MainActor.run {
-                toastMessage = "Profile will sync when connection is restored."
-            }
-        }
-    }
-
-    private func loadLiveBookings() async {
-        do {
-            let liveBookings = try await api.fetchUserBookings(token: authToken)
-            if !liveBookings.isEmpty {
-                await MainActor.run {
-                    let selected = latestBooking
-                    bookings = liveBookings
-                    if let selected,
-                       let updated = liveBookings.first(where: { $0.id == selected.id || (!selected.bookingCode.isEmpty && $0.bookingCode == selected.bookingCode) }) {
-                        latestBooking = updated
-                    } else {
-                        latestBooking = liveBookings.first(where: { !["completed", "cancelled", "rejected"].contains($0.progressStatus) }) ?? liveBookings.first
-                    }
-                }
-            }
-        } catch {
-            // Keep local bookings visible if the backend is temporarily unavailable.
-        }
-    }
-
-    private func submitBookingToBackend(service: ServiceItem, draft: BookingDraft, profile: UserProfile, bookingCode: String, fallbackId: String) async {
-        do {
-            let liveBooking = try await api.createBooking(
-                service: service,
-                draft: draft,
-                profile: profile,
-                bookingCode: bookingCode,
-                fcmToken: notificationService.fcmToken,
-                token: authToken
-            )
-            await MainActor.run {
-                latestBooking = liveBooking
-                if let index = bookings.firstIndex(where: { $0.id == fallbackId }) {
-                    bookings[index] = liveBooking
-                } else {
-                    upsertBooking(liveBooking)
-                }
-            }
-            await refreshLiveBookings()
-        } catch {
-            await MainActor.run {
-                bookings.removeAll { $0.id == fallbackId || $0.bookingCode == bookingCode }
-                if latestBooking?.id == fallbackId || latestBooking?.bookingCode == bookingCode {
-                    latestBooking = bookings.first
-                }
-                navigate(.confirm)
-                toastMessage = "Booking could not be created. Please check network and try again."
-            }
-        }
-    }
-
     private func supportReply(for text: String) -> String {
         let lower = text.lowercased()
         if lower.contains("payment") || lower.contains("amount") {
@@ -570,15 +478,5 @@ final class UserAppStore: ObservableObject {
             return "You can update address before confirming the booking. Support can help after confirmation."
         }
         return "Request recorded. Our support team will follow up from your booking details."
-    }
-
-    private static func slotStartMinutes(_ slot: String) -> Int? {
-        let startText = slot.components(separatedBy: " - ").first ?? slot
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "hh:mm a"
-        guard let date = formatter.date(from: startText) else { return nil }
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
     }
 }

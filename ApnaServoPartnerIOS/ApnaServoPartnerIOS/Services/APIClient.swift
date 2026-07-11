@@ -15,7 +15,7 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingToken: return "Authentication token missing."
+        case .missingToken: return "Firebase ID token missing. Sign in with Firebase or save a temporary development token in Profile."
         case .invalidURL: return "Backend URL invalid."
         case .badResponse(let message): return message
         }
@@ -36,6 +36,8 @@ final class APIClient {
     private var activeBaseURL: URL
     private let baseURLs: [URL]
     private let session: URLSession
+    private let secureStore = SecureStore()
+    private let localDeviceToken = "local-device-auth"
 
     init(baseURLs: [URL] = [AppConfig.apiBaseURL], session: URLSession = .shared) {
         self.baseURLs = baseURLs
@@ -48,11 +50,20 @@ final class APIClient {
             "name": profile.name,
             "phone": profile.phone,
             "email": profile.email,
+            "dob": profile.dob,
+            "gender": profile.gender,
+            "address": profile.address,
+            "city": profile.city,
+            "state": profile.state,
+            "pinCode": profile.pinCode,
+            "emergencyContactNumber": profile.emergencyContactNumber,
+            "yearsOfExperience": profile.yearsOfExperience,
+            "workingAreas": profile.workingAreas,
+            "languages": profile.languages,
             "serviceCategory": profile.skills.map(\.rawValue),
             "isOnline": profile.online,
             "serviceRadiusKm": profile.serviceRadiusKm,
             "serviceArea": profile.serviceArea,
-            "city": AppConfig.defaultCity,
             "lat": profile.lat,
             "lng": profile.lng,
             "fcmToken": fcmToken,
@@ -68,7 +79,18 @@ final class APIClient {
     }
 
     func saveFCMToken(_ fcmToken: String, token: String) async throws {
-        let _: EmptyResponse = try await request(path: "/partners/fcm-token", method: "POST", token: token, body: ["fcmToken": fcmToken])
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "ios-device"
+        let androidPathBody: [String: Any] = [
+            "token": fcmToken,
+            "platform": "ios",
+            "deviceId": deviceId,
+            "appType": "partner"
+        ]
+        do {
+            let _: EmptyResponse = try await request(path: "/notifications/device-token", method: "POST", token: token, body: androidPathBody)
+        } catch {
+            let _: EmptyResponse = try await request(path: "/partners/fcm-token", method: "POST", token: token, body: ["fcmToken": fcmToken])
+        }
     }
 
     func requestAccountDeletion(reason: String, token: String) async throws {
@@ -76,8 +98,13 @@ final class APIClient {
     }
 
     func fetchNotifications(token: String) async throws -> [PartnerNotificationItem] {
-        let envelope: NotificationsEnvelope = try await request(path: "/notifications?role=partner", token: token)
-        return envelope.notifications ?? []
+        do {
+            let envelope: NotificationsEnvelope = try await request(path: "/notifications/my-notifications?role=partner&page=1&limit=25", token: token)
+            return envelope.notifications ?? []
+        } catch {
+            let envelope: NotificationsEnvelope = try await request(path: "/notifications?role=partner&limit=25", token: token)
+            return envelope.notifications ?? []
+        }
     }
 
     func markNotificationRead(_ notificationId: String, token: String) async {
@@ -108,7 +135,11 @@ final class APIClient {
     }
 
     func acceptBooking(_ bookingId: String, token: String) async throws -> PartnerBooking {
-        let envelope: BookingEnvelope = try await request(path: "/bookings/\(bookingId)/accept", method: "POST", token: token, body: [:])
+        let body: [String: Any] = [
+            "arrivalEstimateMinutes": 30,
+            "arrivalEstimateLabel": "30 minutes"
+        ]
+        let envelope: BookingEnvelope = try await request(path: "/bookings/\(bookingId)/accept", method: "POST", token: token, body: body)
         return envelope.booking ?? PartnerBooking(id: bookingId, serviceName: "Service", issue: "Accepted", customerName: "Customer", address: "Address", slot: "Slot", status: "accepted")
     }
 
@@ -149,14 +180,30 @@ final class APIClient {
     }
 
     func submitVerification(aadhaarLast4: String, selfieURL: String, faceVerified: Bool, selfieVerified: Bool, token: String) async throws {
-        let body: [String: Any] = [
-            "aadhaarLast4": aadhaarLast4,
+        var body: [String: Any] = [
             "selfieUrl": selfieURL,
             "faceVerified": faceVerified,
             "selfieVerified": selfieVerified,
-            "livenessChecks": ["iosReady": true]
+            "livenessChecks": [:]
         ]
+        if !aadhaarLast4.isEmpty {
+            body["aadhaarLast4"] = aadhaarLast4
+        }
+        if selfieURL.isEmpty {
+            body.removeValue(forKey: "selfieUrl")
+        }
         let _: EmptyResponse = try await request(path: "/partners/verification", method: "POST", token: token, body: body)
+    }
+
+    func createPartnerSupportTicket(category: String, message: String, clientMessageId: String, attachmentURL: String, token: String) async throws {
+        let body: [String: Any] = [
+            "category": category,
+            "message": message,
+            "clientMessageId": clientMessageId,
+            "attachmentUrl": attachmentURL,
+            "priority": "high"
+        ]
+        let _: EmptyResponse = try await request(path: "/partners/support-tickets", method: "POST", token: token, body: body)
     }
 
     func uploadDocument(documentType: String, fileURL: URL, aadhaarLast4: String, token: String) async throws {
@@ -206,21 +253,19 @@ final class APIClient {
     }
 
     private func request<T: Decodable>(path: String, method: String = "GET", token: String, body: [String: Any]? = nil) async throws -> T {
+        let resolvedToken = normalizedToken(token)
         var lastError: Error?
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
         for baseURL in ordered {
             do {
-                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: token, body: body)
+                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: resolvedToken, body: body)
                 activeBaseURL = baseURL
                 return value
             } catch {
                 lastError = error
             }
         }
-        if let lastError = lastError {
-            throw lastError
-        }
-        throw APIError.badResponse("Backend not reachable.")
+        throw lastError ?? APIError.badResponse("Backend not reachable.")
     }
 
     private func execute<T: Decodable>(baseURL: URL, path: String, method: String, token: String, body: [String: Any]?) async throws -> T {
@@ -244,14 +289,40 @@ final class APIClient {
     }
 
     private func dataRequest(path: String, token: String) async throws -> Data {
+        let resolvedToken = normalizedToken(token)
         var request = URLRequest(url: try makeURL(baseURL: activeBaseURL, path: path))
         request.httpMethod = "GET"
-        applyAuthHeaders(to: &request, token: token)
+        applyAuthHeaders(to: &request, token: resolvedToken)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.badResponse("PDF generation failed.")
         }
         return data
+    }
+
+    private func normalizedToken(_ token: String) -> String {
+        let clean = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? localDeviceToken : clean
+    }
+
+    private func applyAuthHeaders(to request: inout URLRequest, token: String) {
+        let resolvedToken = normalizedToken(token)
+        request.setValue("Bearer \(resolvedToken)", forHTTPHeaderField: "Authorization")
+        if resolvedToken == localDeviceToken || resolvedToken == "local-development" {
+            request.setValue(localDevUid(), forHTTPHeaderField: "X-ApnaServo-Dev-Uid")
+            request.setValue("partner", forHTTPHeaderField: "X-ApnaServo-Dev-Role")
+        }
+    }
+
+    private func localDevUid() -> String {
+        let key = "ios_partner_dev_uid"
+        let saved = secureStore.string(for: key)
+        if !saved.isEmpty {
+            return saved
+        }
+        let generated = "local-ios-partner-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
+        secureStore.set(generated, for: key)
+        return generated
     }
 
     private func makeURL(baseURL: URL, path: String) throws -> URL {
@@ -268,30 +339,6 @@ final class APIClient {
             return finalURL
         }
         return url
-    }
-
-    private func applyAuthHeaders(to request: inout URLRequest, token: String) {
-        let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleanToken.isEmpty {
-            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
-            return
-        }
-        #if DEBUG
-        request.setValue(deviceAuthUID(), forHTTPHeaderField: "x-apnaservo-dev-uid")
-        request.setValue("partner", forHTTPHeaderField: "x-apnaservo-dev-role")
-        #endif
-    }
-
-    private func deviceAuthUID() -> String {
-        let key = "apnaservo.ios.partner.device.uid"
-        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
-            return existing
-        }
-        let rawId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        let cleanId = rawId.replacingOccurrences(of: "-", with: "").lowercased()
-        let uid = "local-partner-ios-\(cleanId)"
-        UserDefaults.standard.set(uid, forKey: key)
-        return uid
     }
 
     private func httpError(code: Int, data: Data) -> String {
@@ -324,10 +371,17 @@ final class APIClient {
         addField("originalSizeBytes", "\(fileData.count)")
         data.append("--\(boundary)\r\n".data(using: .utf8)!)
         data.append("Content-Disposition: form-data; name=\"document\"; filename=\"\(fileURL.lastPathComponent)\"\r\n".data(using: .utf8)!)
-        data.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        data.append("Content-Type: \(mimeType(for: fileURL))\r\n\r\n".data(using: .utf8)!)
         data.append(fileData)
         data.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         return data
+    }
+
+    private func mimeType(for fileURL: URL) -> String {
+        switch fileURL.pathExtension.lowercased() {
+        case "png": return "image/png"
+        default: return "image/jpeg"
+        }
     }
 }
 
@@ -391,35 +445,32 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var lastLocation = CLLocation(
-        latitude: AppConfig.defaultLatitude,
-        longitude: AppConfig.defaultLongitude
-    )
+    private var continuation: CheckedContinuation<CLLocation, Never>?
 
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
-        if manager.authorizationStatus == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        }
-        manager.startUpdatingLocation()
     }
 
     func currentLocation() async -> CLLocation {
-        lastLocation
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let location = locations.last {
-            lastLocation = location
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            if manager.authorizationStatus == .notDetermined {
+                manager.requestWhenInUseAuthorization()
+            }
+            manager.requestLocation()
         }
     }
 
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let fallback = CLLocation(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
+        continuation?.resume(returning: locations.last ?? fallback)
+        continuation = nil
+    }
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        lastLocation = CLLocation(
-            latitude: AppConfig.defaultLatitude,
-            longitude: AppConfig.defaultLongitude
-        )
+        continuation?.resume(returning: CLLocation(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude))
+        continuation = nil
     }
 }
