@@ -280,6 +280,8 @@ struct AppNotificationItem: Identifiable, Codable, Hashable {
     var body: String
     var type: String
     var bookingId: String
+    var bookingCode: String
+    var actionType: String
     var isRead: Bool
     var createdAtMillis: Int64
 
@@ -290,16 +292,20 @@ struct AppNotificationItem: Identifiable, Codable, Hashable {
         body = c.string("body", "message", fallback: "Booking update received")
         type = c.string("type")
         bookingId = c.string("bookingId")
+        bookingCode = c.string("bookingCode")
+        actionType = c.string("actionType")
         isRead = c.bool("read", "isRead")
         createdAtMillis = c.int64("createdAtMillis", "createdAt")
     }
 
-    init(id: String, title: String, body: String, type: String, bookingId: String, isRead: Bool, createdAtMillis: Int64) {
+    init(id: String, title: String, body: String, type: String, bookingId: String, bookingCode: String = "", actionType: String = "", isRead: Bool, createdAtMillis: Int64) {
         self.id = id
         self.title = title
         self.body = body
         self.type = type
         self.bookingId = bookingId
+        self.bookingCode = bookingCode
+        self.actionType = actionType
         self.isRead = isRead
         self.createdAtMillis = createdAtMillis
     }

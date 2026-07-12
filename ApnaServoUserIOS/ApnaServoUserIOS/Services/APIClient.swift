@@ -1,4 +1,3 @@
-import CoreLocation
 import Foundation
 import CoreLocation
 import Security
@@ -7,6 +6,10 @@ import UserNotifications
 
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
+#endif
+
+#if canImport(FirebaseCore)
+import FirebaseCore
 #endif
 
 enum APIError: LocalizedError {
@@ -355,22 +358,102 @@ final class SecureStore {
     }
 }
 
+extension Notification.Name {
+    static let apnaServoUserFCMTokenUpdated = Notification.Name("apnaServoUserFCMTokenUpdated")
+    static let apnaServoUserNotificationOpened = Notification.Name("apnaServoUserNotificationOpened")
+}
+
+struct AppNotificationDeepLink: Equatable {
+    let actionType: String
+    let type: String
+    let bookingId: String
+    let bookingCode: String
+    let targetApp: String
+
+    init(actionType: String, type: String, bookingId: String, bookingCode: String, targetApp: String) {
+        self.actionType = actionType.uppercased()
+        self.type = type.lowercased()
+        self.bookingId = bookingId
+        self.bookingCode = bookingCode
+        self.targetApp = targetApp.uppercased()
+    }
+
+    init(userInfo: [AnyHashable: Any]) {
+        func value(_ key: String) -> String {
+            if let text = userInfo[key] as? String { return text }
+            if let number = userInfo[key] as? NSNumber { return number.stringValue }
+            if let nested = userInfo["data"] as? [String: Any] {
+                if let text = nested[key] as? String { return text }
+                if let number = nested[key] as? NSNumber { return number.stringValue }
+            }
+            return ""
+        }
+
+        actionType = value("actionType").uppercased()
+        type = value("type").lowercased()
+        bookingId = value("bookingId")
+        bookingCode = value("bookingCode")
+        targetApp = value("targetApp").uppercased()
+    }
+
+    var isChat: Bool {
+        actionType == "OPEN_BOOKING_CHAT" || type.contains("chat")
+    }
+}
+
 final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = AppNotificationService()
     private(set) var fcmToken = ""
+    private var pendingDeepLink: AppNotificationDeepLink?
+
+    private override init() {
+        super.init()
+    }
 
     func configure() {
         UNUserNotificationCenter.current().delegate = self
         #if canImport(FirebaseMessaging)
+        guard FirebaseApp.app() != nil else { return }
+        Messaging.messaging().delegate = self
         fcmToken = Messaging.messaging().fcmToken ?? ""
         #endif
     }
 
     func requestPermission() async -> Bool {
         do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+            return granted
         } catch {
             return false
         }
+    }
+
+    func setAPNSToken(_ deviceToken: Data) {
+        #if canImport(FirebaseMessaging)
+        guard FirebaseApp.app() != nil else { return }
+        Messaging.messaging().apnsToken = deviceToken
+        #endif
+    }
+
+    func refreshFCMToken() async -> String {
+        #if canImport(FirebaseMessaging)
+        guard FirebaseApp.app() != nil else { return fcmToken }
+        return await withCheckedContinuation { continuation in
+            Messaging.messaging().token { token, _ in
+                if let token {
+                    self.updateFCMToken(token)
+                }
+                continuation.resume(returning: self.fcmToken)
+            }
+        }
+        #else
+        return fcmToken
+        #endif
     }
 
     func userNotificationCenter(
@@ -379,7 +462,36 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     ) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .badge]
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let deepLink = AppNotificationDeepLink(userInfo: response.notification.request.content.userInfo)
+        pendingDeepLink = deepLink
+        NotificationCenter.default.post(name: .apnaServoUserNotificationOpened, object: deepLink)
+        completionHandler()
+    }
+
+    private func updateFCMToken(_ token: String) {
+        fcmToken = token
+        NotificationCenter.default.post(name: .apnaServoUserFCMTokenUpdated, object: token)
+    }
+
+    func consumePendingDeepLink() -> AppNotificationDeepLink? {
+        defer { pendingDeepLink = nil }
+        return pendingDeepLink
+    }
 }
+
+#if canImport(FirebaseMessaging)
+extension AppNotificationService: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        updateFCMToken(fcmToken ?? "")
+    }
+}
+#endif
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()

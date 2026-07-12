@@ -1664,10 +1664,7 @@ struct NotificationRow: View {
 
     var body: some View {
         Button {
-            store.markNotificationRead(item)
-            if let booking = store.bookings.first(where: { $0.id == item.bookingId || $0.bookingCode == item.bookingId }) {
-                store.openTrack(booking)
-            }
+            store.openNotification(item)
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: item.isRead ? "bell" : "bell.fill")

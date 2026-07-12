@@ -59,8 +59,42 @@ final class UserAppStore: ObservableObject {
     let categories = ServiceCatalog.categories
     private let api = APIClient()
     private let secureStore = SecureStore()
-    private let notificationService = AppNotificationService()
+    private let notificationService = AppNotificationService.shared
     private var bookingPollingTask: Task<Void, Never>?
+    private var fcmTokenObserver: NSObjectProtocol?
+    private var notificationOpenObserver: NSObjectProtocol?
+    private var pendingNotificationDeepLink: AppNotificationDeepLink?
+
+    init() {
+        fcmTokenObserver = NotificationCenter.default.addObserver(forName: .apnaServoUserFCMTokenUpdated, object: nil, queue: .main) { [weak self] notification in
+            guard let token = notification.object as? String, !token.isEmpty else { return }
+            Task { @MainActor in
+                guard let self, self.isLoggedIn else { return }
+                try? await self.api.saveFCMToken(token, token: self.apiToken)
+            }
+        }
+        notificationOpenObserver = NotificationCenter.default.addObserver(forName: .apnaServoUserNotificationOpened, object: nil, queue: .main) { [weak self] notification in
+            guard let deepLink = notification.object as? AppNotificationDeepLink else { return }
+            Task { @MainActor in
+                _ = self?.notificationService.consumePendingDeepLink()
+                await self?.openNotificationDeepLink(deepLink)
+            }
+        }
+        if let deepLink = notificationService.consumePendingDeepLink() {
+            Task { @MainActor in
+                await self.openNotificationDeepLink(deepLink)
+            }
+        }
+    }
+
+    deinit {
+        if let fcmTokenObserver {
+            NotificationCenter.default.removeObserver(fcmTokenObserver)
+        }
+        if let notificationOpenObserver {
+            NotificationCenter.default.removeObserver(notificationOpenObserver)
+        }
+    }
 
     var isLoggedIn: Bool {
         !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -114,6 +148,7 @@ final class UserAppStore: ObservableObject {
         Task {
             await syncUserProfile()
             await refreshBookings()
+            await openPendingNotificationDeepLinkIfNeeded()
         }
     }
 
@@ -121,6 +156,7 @@ final class UserAppStore: ObservableObject {
         profile.lat = AppConfig.defaultLatitude
         profile.lng = AppConfig.defaultLongitude
         navigate(.home, remember: false)
+        Task { await openPendingNotificationDeepLinkIfNeeded() }
     }
 
     func openService(_ service: ServiceItem) {
@@ -320,12 +356,38 @@ final class UserAppStore: ObservableObject {
         }
         guard latestBooking != nil else { return }
         navigate(.bookingChat)
+        Task { await loadBookingChat() }
     }
 
     func sendBookingChat(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let booking = latestBooking, !clean.isEmpty else { return }
-        bookingChatMessages.append(ChatMessage.local(text: clean, booking: booking))
+        let local = ChatMessage.local(text: clean, booking: booking)
+        bookingChatMessages.append(local)
+        Task {
+            do {
+                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: apiToken)
+                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
+                    bookingChatMessages[index] = sent
+                }
+                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: apiToken)
+            } catch {
+                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
+                    bookingChatMessages[index].deliveryStatus = "failed"
+                }
+                toastMessage = "Message could not be sent. Please retry."
+            }
+        }
+    }
+
+    func loadBookingChat() async {
+        guard let booking = latestBooking else { return }
+        do {
+            bookingChatMessages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: apiToken)
+            await api.markBookingChatSeen(bookingId: booking.id, token: apiToken)
+        } catch {
+            toastMessage = "Chat could not be refreshed."
+        }
     }
 
     func sendSupportMessage(_ text: String) {
@@ -342,6 +404,81 @@ final class UserAppStore: ObservableObject {
                 copy.isRead = true
             }
             return copy
+        }
+        Task { await api.markNotificationRead(item.id, token: apiToken) }
+    }
+
+    func openNotification(_ item: AppNotificationItem) {
+        markNotificationRead(item)
+        let inferredAction: String
+        if !item.actionType.isEmpty {
+            inferredAction = item.actionType
+        } else if item.type.lowercased().contains("chat") {
+            inferredAction = "OPEN_BOOKING_CHAT"
+        } else {
+            inferredAction = "OPEN_BOOKING"
+        }
+        let deepLink = AppNotificationDeepLink(
+            actionType: inferredAction,
+            type: item.type,
+            bookingId: item.bookingId,
+            bookingCode: item.bookingCode,
+            targetApp: "USER"
+        )
+        Task { await openNotificationDeepLink(deepLink) }
+    }
+
+    func openNotificationDeepLink(_ deepLink: AppNotificationDeepLink) async {
+        guard deepLink.targetApp.isEmpty || deepLink.targetApp == "USER" else { return }
+        guard isLoggedIn else {
+            pendingNotificationDeepLink = deepLink
+            return
+        }
+
+        if deepLink.actionType == "OPEN_SUPPORT" || deepLink.type.contains("support") {
+            navigate(.support, remember: false)
+            return
+        }
+        if deepLink.actionType == "OPEN_HOME" {
+            navigate(.home, remember: false)
+            return
+        }
+
+        var booking = bookingMatching(deepLink)
+        if booking == nil, !deepLink.bookingId.isEmpty {
+            booking = try? await api.getBooking(deepLink.bookingId, token: apiToken)
+            if let booking { upsertBooking(booking) }
+        }
+        if booking == nil {
+            await refreshBookings()
+            booking = bookingMatching(deepLink)
+        }
+
+        guard let booking else {
+            navigate(.bookings, remember: false)
+            toastMessage = "Booking update received. Open the matching booking from My Bookings."
+            return
+        }
+
+        latestBooking = booking
+        if deepLink.isChat {
+            navigate(.bookingChat, remember: false)
+            await loadBookingChat()
+        } else {
+            openTrack(booking)
+        }
+    }
+
+    private func openPendingNotificationDeepLinkIfNeeded() async {
+        guard let deepLink = pendingNotificationDeepLink else { return }
+        pendingNotificationDeepLink = nil
+        await openNotificationDeepLink(deepLink)
+    }
+
+    private func bookingMatching(_ deepLink: AppNotificationDeepLink) -> Booking? {
+        bookings.first { booking in
+            (!deepLink.bookingId.isEmpty && booking.id == deepLink.bookingId)
+                || (!deepLink.bookingCode.isEmpty && booking.bookingCode == deepLink.bookingCode)
         }
     }
 
@@ -372,6 +509,10 @@ final class UserAppStore: ObservableObject {
         notificationService.configure()
         Task {
             _ = await notificationService.requestPermission()
+            let fcmToken = await notificationService.refreshFCMToken()
+            if isLoggedIn, !fcmToken.isEmpty {
+                try? await api.saveFCMToken(fcmToken, token: apiToken)
+            }
         }
     }
 

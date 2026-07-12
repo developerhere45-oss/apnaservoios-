@@ -18,6 +18,8 @@
 		1A0001010000000000000009 /* BookingChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000009 /* BookingChatView.swift */; };
 		1A000101000000000000000A /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000A /* SharedComponents.swift */; };
 		1A000101000000000000000C /* ImportedAndroidAssets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000C /* ImportedAndroidAssets */; };
+		1A0001010000000000000010 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000F010000000000000001 /* FirebaseCore */; };
+		1A0001010000000000000012 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000F010000000000000003 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +35,7 @@
 		1A000201000000000000000A /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		1A000201000000000000000B /* ApnaServoUserIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ApnaServoUserIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000201000000000000000C /* ImportedAndroidAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ImportedAndroidAssets; sourceTree = "<group>"; };
+		1A000201000000000000000E /* ApnaServoUserIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ApnaServoUserIOS.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,6 +43,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A0001010000000000000010 /* FirebaseCore in Frameworks */,
+				1A0001010000000000000012 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -58,6 +63,7 @@
 		1A0004010000000000000002 /* ApnaServoUserIOS */ = {
 			isa = PBXGroup;
 			children = (
+				1A000201000000000000000E /* ApnaServoUserIOS.entitlements */,
 				1A0004010000000000000004 /* App */,
 				1A0004010000000000000005 /* Models */,
 				1A0004010000000000000006 /* Services */,
@@ -152,6 +158,10 @@
 			dependencies = (
 			);
 			name = ApnaServoUserIOS;
+			packageProductDependencies = (
+				1A000F010000000000000001 /* FirebaseCore */,
+				1A000F010000000000000003 /* FirebaseMessaging */,
+			);
 			productName = ApnaServoUserIOS;
 			productReference = 1A000201000000000000000B /* ApnaServoUserIOS.app */;
 			productType = "com.apple.product-type.application";
@@ -183,6 +193,9 @@
 			productRefGroup = 1A0004010000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			targets = (
 				1A0005010000000000000001 /* ApnaServoUserIOS */,
 			);
@@ -219,6 +232,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.16.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1A000F010000000000000001 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		1A000F010000000000000003 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A000D010000000000000001 /* Debug */ = {
@@ -339,7 +376,9 @@
 		1A000E010000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = ApnaServoUserIOS/ApnaServoUserIOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -367,7 +406,9 @@
 		1A000E010000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = ApnaServoUserIOS/ApnaServoUserIOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
