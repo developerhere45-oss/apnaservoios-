@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var store: UserAppStore
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -46,6 +47,16 @@ struct RootView: View {
         .sheet(isPresented: $store.showLegalSheet) {
             LegalInformationSheet()
                 .presentationDetents([.large])
+        }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active else { return }
+            Task {
+                await store.refreshBookings()
+                if let booking = store.latestBooking,
+                   !["completed", "cancelled", "rejected"].contains(booking.status) {
+                    store.startBookingPolling()
+                }
+            }
         }
     }
 }

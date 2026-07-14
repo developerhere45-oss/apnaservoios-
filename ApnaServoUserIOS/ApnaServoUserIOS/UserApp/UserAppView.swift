@@ -26,7 +26,9 @@ struct UserAppView: View {
 
     private var showsBottomNav: Bool {
         switch store.screen {
-        case .home, .services, .detail, .track, .bookings, .notifications, .profile, .commercial:
+        case .track:
+            return store.latestBooking?.status == "completed"
+        case .home, .services, .detail, .bookings, .notifications, .profile, .commercial:
             return true
         default:
             return false
@@ -1201,120 +1203,122 @@ struct BookingConfirmScreen: View {
 
 struct BookingConfirmedScreen: View {
     @EnvironmentObject private var store: UserAppStore
+    @State private var showsConfirmation = true
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar(title: "Booking Confirmed", subtitle: store.latestBooking?.displayId ?? "", backAction: { store.navigate(.home) })
+            if !showsConfirmation || store.latestBooking?.status != "pending" {
+                BookingFlowTopBar(booking: store.latestBooking, backAction: { store.navigate(.home) })
+            }
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    successHeader
-                    if let booking = store.latestBooking {
-                        BookingHistoryCard(booking: booking)
-                        if booking.status == "pending" {
-                            FindingPartnerCard()
-                        } else {
-                            PartnerAssignedCard(booking: booking)
-                        }
-                        Button("View Booking Status") {
-                            store.openTrack(booking)
-                        }
-                        .darkCTA()
+                if let booking = store.latestBooking {
+                    if showsConfirmation && booking.status == "pending" {
+                        BookingConfirmationSplash(booking: booking)
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     } else {
-                        EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
+                        BookingLifecycleContent(booking: booking)
+                            .transition(.opacity)
                     }
+                } else {
+                    EmptyState(title: "No booking found", subtitle: "Your confirmed booking will appear here.")
+                        .padding(18)
                 }
-                .padding(18)
             }
         }
         .task {
             store.startBookingPolling()
-        }
-    }
-
-    private var successHeader: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.greenSoft)
-                    .frame(width: 92, height: 92)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 38, weight: .black))
-                    .foregroundStyle(AppTheme.green)
+            try? await Task.sleep(nanoseconds: 1_700_000_000)
+            withAnimation(.easeInOut(duration: 0.35)) {
+                showsConfirmation = false
             }
-            Text("Your request is confirmed")
-                .font(.system(size: 23, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text("We are searching nearby verified partners. This screen updates automatically when a partner accepts your booking.")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity)
-        .androidCard(padding: 18, radius: 22)
+        .onChange(of: store.latestBooking?.status) { status in
+            if status != "pending" {
+                showsConfirmation = false
+            }
+        }
     }
 }
 
-struct FindingPartnerCard: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle().stroke(AppTheme.bookingSoft, lineWidth: 18).frame(width: 130, height: 130)
-                Circle().stroke(AppTheme.booking.opacity(0.28), lineWidth: 9).frame(width: 96, height: 96)
-                ProgressView()
-                    .tint(AppTheme.booking)
-                    .scaleEffect(1.35)
-                Image(systemName: "location.north.fill")
-                    .foregroundStyle(AppTheme.booking)
-                    .offset(x: 42, y: -36)
-            }
-            Text("Finding best partner")
-                .font(.system(size: 18, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text("Request sent to nearby verified experts. We will notify you as soon as a partner accepts.")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .androidCard(padding: 18, radius: 22, border: AppTheme.bookingSoft)
-    }
-}
-
-struct PartnerAssignedCard: View {
+private struct BookingConfirmationSplash: View {
     let booking: Booking
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(spacing: 12) {
-                Text(String(booking.partnerName.prefix(1)))
-                    .font(.system(size: 22, weight: .black))
+        VStack(spacing: 14) {
+            Spacer(minLength: 76)
+            ZStack {
+                Circle().fill(AppTheme.greenSoft).frame(width: 148, height: 148)
+                Circle().stroke(AppTheme.green.opacity(0.22), lineWidth: 14).frame(width: 178, height: 178)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 54, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 58, height: 58)
+                    .frame(width: 104, height: 104)
                     .background(AppTheme.green, in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(booking.partnerName)
-                        .font(.system(size: 17, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
-                    Text("Verified expert - 4.8 rating")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                Spacer()
-                Text("ASSIGNED")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(AppTheme.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(AppTheme.greenSoft, in: Capsule())
+                    .shadow(color: AppTheme.green.opacity(0.28), radius: 16, y: 8)
             }
-            HStack(spacing: 10) {
-                Label("Call", systemImage: "phone.fill")
-                    .outlineCTA()
-                Label("Chat", systemImage: "message.fill")
-                    .outlineCTA()
-            }
+            .padding(.bottom, 12)
+            Text("Booking Confirmed!")
+                .font(.system(size: 27, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+            Text("Your booking has been received successfully.")
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+            Text(booking.displayId)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AppTheme.booking)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(AppTheme.bookingSoft, in: Capsule())
+            Spacer(minLength: 120)
         }
-        .androidCard(padding: 16, radius: 20, border: AppTheme.greenSoft)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 620)
+        .background(Color.white)
+    }
+}
+
+private struct BookingFlowTopBar: View {
+    @EnvironmentObject private var store: UserAppStore
+    let booking: Booking?
+    let backAction: () -> Void
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: backAction) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 15))
+                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            VStack(spacing: 2) {
+                Text("Booking Status")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(booking?.displayId ?? "Live updates about your service")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.muted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            Button {
+                store.navigate(.support)
+            } label: {
+                Image(systemName: "headphones")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 15))
+                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(AppTheme.bg)
     }
 }
 
@@ -1323,36 +1327,10 @@ struct TrackBookingScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar(title: "Track Booking", subtitle: store.latestBooking?.displayId ?? "", backAction: { store.navigate(.home) })
+            BookingFlowTopBar(booking: store.latestBooking, backAction: { store.back() })
             ScrollView(showsIndicators: false) {
                 if let booking = store.latestBooking {
-                    VStack(spacing: 16) {
-                        BookingStatusHeader(booking: booking)
-                        if booking.isAssigned {
-                            PartnerAssignedCard(booking: booking)
-                        } else {
-                            FindingPartnerCard()
-                        }
-                        BookingProgressTimeline(booking: booking)
-                        MockLiveMapCard(booking: booking)
-                        if booking.isAmountApprovalPending {
-                            AmountApprovalCard(booking: booking)
-                        }
-                        HStack(spacing: 10) {
-                            Button("Chat") {
-                                store.openBookingChat(booking)
-                            }
-                            .outlineCTA()
-                            Button("Refresh Status") {
-                                Task {
-                                    await store.refreshLatestBooking()
-                                }
-                            }
-                            .outlineCTA()
-                        }
-                    }
-                    .padding(18)
-                    .padding(.bottom, 110)
+                    BookingLifecycleContent(booking: booking)
                 } else {
                     EmptyState(title: "No active booking", subtitle: "Book a service to start tracking.")
                         .padding(18)
@@ -1365,154 +1343,619 @@ struct TrackBookingScreen: View {
     }
 }
 
-struct BookingStatusHeader: View {
+private struct BookingLifecycleContent: View {
+    @EnvironmentObject private var store: UserAppStore
     let booking: Booking
 
+    @ViewBuilder
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(booking.serviceName)
-                        .font(.system(size: 20, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
-                    Text(booking.displayId)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                Spacer()
-                StatusChip(status: booking.status)
+        switch booking.status {
+        case "pending", "sent_to_partner", "searching":
+            FindingPartnerPage(booking: booking)
+        case "accepted", "on_the_way", "arrived", "started":
+            ActiveBookingPage(booking: booking)
+        case "amount_pending":
+            if booking.isWaitingForPaymentVerification {
+                PaymentVerificationPage(booking: booking)
+            } else {
+                ServicePaymentPage(booking: booking)
             }
-            Text(booking.issue)
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-            HStack {
-                info("Slot", booking.slot)
-                info("Amount", booking.amount > 0 ? "Rs \(booking.amount)" : "After quote")
-            }
+        case "completed":
+            PaymentVerifiedPage(booking: booking)
+        case "cancelled", "rejected":
+            ClosedBookingPage(booking: booking)
+        default:
+            ActiveBookingPage(booking: booking)
         }
-        .androidCard(padding: 16, radius: 20)
-    }
-
-    private func info(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.system(size: 10, weight: .black))
-                .foregroundStyle(AppTheme.muted)
-            Text(value)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-struct BookingProgressTimeline: View {
+private struct FindingPartnerPage: View {
+    @EnvironmentObject private var store: UserAppStore
     let booking: Booking
-    private let steps = [
-        ("pending", "Finding Partner"),
-        ("accepted", "Assigned"),
-        ("on_the_way", "On The Way"),
-        ("arrived", "Arrived"),
-        ("started", "Started"),
-        ("completed", "Completed")
-    ]
+    @State private var confirmsCancellation = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Booking Progress")
-                .font(.system(size: 18, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                timelineRow(title: step.1, active: index <= activeIndex, isLast: index == steps.count - 1)
+        VStack(spacing: 14) {
+            FindingPartnerArtwork()
+                .frame(height: 160)
+            VStack(spacing: 5) {
+                Text("Finding the best expert\nfor you...")
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(Color(hex: 0x061B2F))
+                    .multilineTextAlignment(.center)
+                Text("Searching nearby verified partners")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.muted)
             }
+            BookingDetailsPanel(booking: booking, showsAmount: false)
+            Button {
+                confirmsCancellation = true
+            } label: {
+                Label(store.bookingActionInFlight ? "Cancelling..." : "Cancel Booking", systemImage: "xmark.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .disabled(store.bookingActionInFlight)
+            .buttonStyle(.plain)
+            FlowNotice(icon: "bell.badge", title: "Stay notified", message: "We will notify you as soon as a verified partner accepts your booking.", accent: AppTheme.booking)
+            FlowNotice(icon: "shield.checkered", title: "You're covered", message: "Verified partners, protected calling and in-app support are included.", accent: AppTheme.green)
         }
-        .androidCard(padding: 16, radius: 20)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+        .confirmationDialog("Cancel this booking?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
+            Button("Cancel Booking", role: .destructive) { store.cancelLatestBooking() }
+            Button("Keep Booking", role: .cancel) {}
+        } message: {
+            Text("Cancellation is available before the partner starts travelling.")
+        }
     }
+}
 
-    private var activeIndex: Int {
-        if booking.status == "amount_pending" { return 4 }
-        return steps.firstIndex { $0.0 == booking.status } ?? 0
-    }
+private struct FindingPartnerArtwork: View {
+    @State private var pulses = false
 
-    private func timelineRow(title: String, active: Bool, isLast: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(spacing: 0) {
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(active ? AppTheme.green : AppTheme.line)
-                    .frame(width: 18, height: 18)
-                if !isLast {
-                    Rectangle()
-                        .fill(active ? AppTheme.green : AppTheme.line)
-                        .frame(width: 2, height: 24)
-                }
+                    .stroke(AppTheme.green.opacity(0.22 - Double(index) * 0.045), lineWidth: 2)
+                    .frame(width: CGFloat(68 + index * 38), height: CGFloat(68 + index * 38))
+                    .scaleEffect(pulses ? 1.05 : 0.9)
+                    .opacity(pulses ? 0.45 : 1)
+                    .animation(.easeOut(duration: 1.55).repeatForever(autoreverses: true).delay(Double(index) * 0.16), value: pulses)
             }
-            Text(title)
-                .font(.system(size: 13, weight: active ? .black : .semibold))
-                .foregroundStyle(active ? AppTheme.ink : AppTheme.muted)
-            Spacer()
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 76, height: 76)
+                .background(AppTheme.green, in: Circle())
+                .shadow(color: AppTheme.green.opacity(0.28), radius: 14, y: 8)
+            Image(systemName: "mappin.circle.fill")
+                .font(.system(size: 25, weight: .bold))
+                .foregroundStyle(AppTheme.booking)
+                .offset(x: 64, y: -49)
         }
+        .frame(maxWidth: .infinity)
+        .onAppear { pulses = true }
     }
 }
 
-struct MockLiveMapCard: View {
+private struct ActiveBookingPage: View {
+    @EnvironmentObject private var store: UserAppStore
     let booking: Booking
+    @State private var confirmsCancellation = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Live Location")
-                .font(.system(size: 18, weight: .black))
-            ZStack {
-                LinearGradient(colors: [Color(hex: 0xE7F2EA), Color(hex: 0xFFF5F1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                VStack(spacing: 8) {
-                    Image(systemName: "map.fill")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(AppTheme.green)
-                    Text(booking.address)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
+        VStack(spacing: 14) {
+            BookingStateHero(
+                icon: heroIcon,
+                title: booking.statusTitle + (booking.status == "accepted" || booking.status == "arrived" ? "!" : ""),
+                subtitle: heroSubtitle,
+                accent: heroAccent
+            )
+            PartnerFlowCard(booking: booking)
+            if booking.canCustomerCancel {
+                Button {
+                    confirmsCancellation = true
+                } label: {
+                    Label("Cancel Booking", systemImage: "calendar.badge.minus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.booking)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
                 }
-                .padding()
+                .buttonStyle(.plain)
             }
-            .frame(height: 148)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
+            BookingProgressPanel(booking: booking)
+            BookingDetailsPanel(booking: booking, showsAmount: false)
+            FlowNotice(icon: "bell", title: "Live booking updates", message: "This page refreshes automatically whenever your partner updates the job.", accent: AppTheme.booking)
         }
-        .androidCard(padding: 16, radius: 20)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+        .confirmationDialog("Cancel this booking?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
+            Button("Cancel Booking", role: .destructive) { store.cancelLatestBooking() }
+            Button("Keep Booking", role: .cancel) {}
+        }
+    }
+
+    private var heroIcon: String {
+        switch booking.status {
+        case "accepted": return "checkmark.seal.fill"
+        case "on_the_way": return "scooter"
+        case "arrived": return "mappin.and.ellipse"
+        default: return "wrench.and.screwdriver.fill"
+        }
+    }
+
+    private var heroAccent: Color {
+        switch booking.status {
+        case "on_the_way": return AppTheme.booking
+        case "arrived": return AppTheme.orange
+        case "started": return AppTheme.green
+        default: return AppTheme.green
+        }
+    }
+
+    private var heroSubtitle: String {
+        switch booking.status {
+        case "accepted": return "A verified professional has accepted your booking."
+        case "on_the_way": return "Your partner is on the way to your location. We're almost there!"
+        case "arrived": return "Your partner has arrived at your location. Get ready for your service."
+        case "started": return "Your partner is working on your service. We will notify you when it is done."
+        default: return "Your booking is active and updating automatically."
+        }
     }
 }
 
-struct AmountApprovalCard: View {
+private struct BookingStateHero: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let accent: Color
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle().fill(accent.opacity(0.1)).frame(width: 118, height: 118)
+                Circle().stroke(accent.opacity(0.2), lineWidth: 10).frame(width: 92, height: 92)
+                Image(systemName: icon)
+                    .font(.system(size: 38, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 72, height: 72)
+                    .background(accent, in: Circle())
+                    .shadow(color: accent.opacity(0.25), radius: 12, y: 7)
+            }
+            Text(title)
+                .font(.system(size: 25, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .multilineTextAlignment(.center)
+            Text(subtitle)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+    }
+}
+
+private struct PartnerFlowCard: View {
     @EnvironmentObject private var store: UserAppStore
     let booking: Booking
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Amount approval required")
-                .font(.system(size: 18, weight: .black))
-                .foregroundStyle(AppTheme.ink)
-            Text(booking.quoteStatus == "payment_submitted" ? "Waiting for partner payment verification." : "Partner shared the final amount after inspection.")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.muted)
-            HStack {
-                Text("Rs \(booking.amount)")
-                    .font(.system(size: 26, weight: .black))
-                    .foregroundStyle(AppTheme.booking)
-                Spacer()
-                Button(booking.quoteStatus == "payment_submitted" ? "Waiting" : "Paid to Partner") {
-                    store.approveAmount()
+        VStack(spacing: 14) {
+            HStack(spacing: 13) {
+                Text(partnerInitials)
+                    .font(.system(size: 23, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 64, height: 64)
+                    .background(AppTheme.booking, in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(booking.partnerName.isEmpty ? "Assigned Partner" : booking.partnerName)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .lineLimit(1)
+                    Label("Verified service partner", systemImage: "checkmark.shield.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.green)
                 }
-                .font(.system(size: 13, weight: .black))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .frame(height: 42)
-                .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
-                .disabled(booking.quoteStatus == "payment_submitted")
+                Spacer()
+                StatusChip(status: booking.status)
+            }
+            HStack(spacing: 10) {
+                Button { store.callPartner(booking) } label: {
+                    Label("Call", systemImage: "phone.fill")
+                        .flowActionStyle(color: AppTheme.green)
+                }
+                Button { store.openBookingChat(booking) } label: {
+                    Label("Chat", systemImage: "message.fill")
+                        .flowActionStyle(color: AppTheme.booking)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .flowPanel()
+    }
+
+    private var partnerInitials: String {
+        let initials = booking.partnerName.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return initials.isEmpty ? "AS" : initials.uppercased()
+    }
+}
+
+private struct BookingProgressPanel: View {
+    let booking: Booking
+    private let steps = [
+        ("accepted", "Partner Assigned"),
+        ("on_the_way", "On The Way"),
+        ("arrived", "Arrived"),
+        ("started", "Work in Progress"),
+        ("amount_pending", "Service Completed")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Booking Progress")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .padding(.bottom, 14)
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                let rank = statusRank
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(spacing: 0) {
+                        Image(systemName: index < rank ? "checkmark.circle.fill" : index == rank ? "circle.inset.filled" : "circle")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(index <= rank ? AppTheme.green : AppTheme.line)
+                        if index < steps.count - 1 {
+                            Rectangle()
+                                .fill(index < rank ? AppTheme.green.opacity(0.45) : AppTheme.line)
+                                .frame(width: 2, height: 27)
+                        }
+                    }
+                    Text(step.1)
+                        .font(.system(size: 13, weight: index == rank ? .bold : .medium))
+                        .foregroundStyle(index <= rank ? AppTheme.ink : AppTheme.muted)
+                        .padding(.top, 1)
+                    Spacer()
+                    if index == rank {
+                        Text("LIVE")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(AppTheme.green)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.greenSoft, in: Capsule())
+                    }
+                }
             }
         }
-        .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)
+        .flowPanel()
+    }
+
+    private var statusRank: Int {
+        switch booking.status {
+        case "accepted": return 0
+        case "on_the_way": return 1
+        case "arrived": return 2
+        case "started": return 3
+        case "amount_pending", "completed": return 4
+        default: return 0
+        }
+    }
+}
+
+private struct BookingDetailsPanel: View {
+    let booking: Booking
+    let showsAmount: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Booking ID").font(.system(size: 11)).foregroundStyle(AppTheme.muted)
+                    Text(booking.displayId).font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.booking)
+                }
+                Spacer()
+                StatusChip(status: booking.status)
+            }
+            .padding(.bottom, 12)
+            Divider()
+            FlowDetailRow(icon: "wrench.and.screwdriver", title: "Service", value: booking.serviceName)
+            Divider().padding(.leading, 48)
+            FlowDetailRow(icon: "calendar", title: "Date & Time", value: booking.slot)
+            Divider().padding(.leading, 48)
+            FlowDetailRow(icon: "mappin", title: "Service Address", value: booking.address)
+            if showsAmount {
+                Divider().padding(.leading, 48)
+                FlowDetailRow(icon: "indianrupeesign.circle", title: "Final Amount", value: "Rs \(booking.amount)")
+            }
+        }
+        .flowPanel()
+    }
+}
+
+private struct FlowDetailRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.booking)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 11))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 11)).foregroundStyle(AppTheme.muted)
+                Text(value.isEmpty ? "Pending" : value)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+private struct ServicePaymentPage: View {
+    @EnvironmentObject private var store: UserAppStore
+    let booking: Booking
+    @State private var showsCounterOffer = false
+
+    var body: some View {
+        VStack(spacing: 14) {
+            BookingStateHero(icon: "checkmark.circle.fill", title: "Service Completed!", subtitle: "Your service has been completed successfully.", accent: AppTheme.green)
+            PartnerFlowCard(booking: booking)
+            FlowNotice(icon: "wallet.pass", title: "Pay directly to your service partner", message: "Confirm only after you have paid the amount directly to the partner.", accent: AppTheme.green)
+            VStack(spacing: 10) {
+                HStack {
+                    Image(systemName: "indianrupeesign")
+                        .font(.system(size: 27, weight: .bold))
+                        .foregroundStyle(AppTheme.booking)
+                        .frame(width: 58, height: 58)
+                        .background(AppTheme.bookingSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Amount to be paid").font(.system(size: 12)).foregroundStyle(AppTheme.muted)
+                        Text("Rs \(booking.amount)").font(.system(size: 27, weight: .bold)).foregroundStyle(AppTheme.booking)
+                    }
+                    Spacer()
+                    Image(systemName: "doc.text.fill").font(.system(size: 30)).foregroundStyle(AppTheme.booking.opacity(0.7))
+                }
+                Divider()
+                Text("The exact amount was sent by your service partner after completing the service.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .flowPanel()
+            FlowNotice(icon: "shield.checkered", title: "Pay only after service", message: "Never share OTP, PIN or card details with anyone.", accent: AppTheme.booking)
+            if quoteExpired {
+                FlowNotice(icon: "exclamationmark.triangle.fill", title: "Quote expired", message: "Ask your partner to send a fresh final amount before confirming payment.", accent: AppTheme.orange)
+                Button("Chat with Partner") { store.openBookingChat(booking) }
+                    .outlineCTA()
+            } else if booking.quoteStatus == "countered" {
+                FlowNotice(icon: "clock.arrow.circlepath", title: "Counter offer sent", message: "Waiting for your partner to send an updated final amount.", accent: AppTheme.orange)
+            } else {
+                Button {
+                    store.approveAmount()
+                } label: {
+                    HStack {
+                        Image(systemName: "wallet.pass.fill")
+                        Text(store.bookingActionInFlight ? "Submitting..." : "Paid to Partner")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity, minHeight: 58)
+                    .background(AppTheme.booking, in: RoundedRectangle(cornerRadius: 18))
+                }
+                .disabled(store.bookingActionInFlight || booking.amount <= 0)
+                .buttonStyle(.plain)
+
+                Button("Send Counter Offer") { showsCounterOffer = true }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.booking)
+                    .disabled(store.bookingActionInFlight)
+            }
+            Text("Secure & Safe Payment")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+        .sheet(isPresented: $showsCounterOffer) {
+            CounterOfferSheet(booking: booking)
+                .presentationDetents([.height(330)])
+        }
+    }
+
+    private var quoteExpired: Bool {
+        booking.quoteExpiresAtMillis > 0
+            && booking.quoteExpiresAtMillis <= Int64(Date().timeIntervalSince1970 * 1000)
+    }
+}
+
+private struct CounterOfferSheet: View {
+    @EnvironmentObject private var store: UserAppStore
+    @Environment(\.dismiss) private var dismiss
+    let booking: Booking
+    @State private var amount = ""
+    @State private var message = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Send Counter Offer").font(.system(size: 21, weight: .bold)).foregroundStyle(AppTheme.ink)
+            Text("Partner amount: Rs \(booking.amount)").font(.system(size: 13)).foregroundStyle(AppTheme.muted)
+            TextField("Your amount", text: $amount)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .frame(height: 50)
+                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
+            TextField("Reason (optional)", text: $message)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .frame(height: 50)
+                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
+            Button("Send Offer") {
+                guard let value = Int(amount), value > 0 else {
+                    store.toastMessage = "Enter a valid counter amount."
+                    return
+                }
+                store.sendCounterOffer(amount: value, message: message)
+                dismiss()
+            }
+            .roseCTA()
+            Spacer()
+        }
+        .padding(20)
+        .background(Color.white)
+    }
+}
+
+private struct PaymentVerificationPage: View {
+    @EnvironmentObject private var store: UserAppStore
+    let booking: Booking
+
+    var body: some View {
+        VStack(spacing: 14) {
+            BookingStateHero(icon: "clock.badge.checkmark", title: "Waiting for Verification", subtitle: "\(booking.partnerName) will verify your payment shortly.", accent: AppTheme.green)
+            PartnerFlowCard(booking: booking)
+            FlowNotice(icon: "info.circle.fill", title: "What happens next?", message: "Once the partner verifies your payment, this service will automatically be marked completed.", accent: AppTheme.green)
+            FlowNotice(icon: "lock.shield.fill", title: "Your confirmation is protected", message: "The booking stays open until your partner confirms the payment receipt.", accent: AppTheme.booking)
+            Button {
+                store.navigate(.support)
+            } label: {
+                Label("Need Help? Contact Support", systemImage: "headphones")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+    }
+}
+
+private struct PaymentVerifiedPage: View {
+    @EnvironmentObject private var store: UserAppStore
+    let booking: Booking
+    @State private var rating = 0
+
+    var body: some View {
+        VStack(spacing: 14) {
+            BookingStateHero(icon: "checkmark.seal.fill", title: "Service Completed!", subtitle: "Payment verified. Thank you!", accent: AppTheme.green)
+            PartnerFlowCard(booking: booking)
+            FlowNotice(icon: "checkmark.circle.fill", title: "Paid directly to your service partner", message: "Thank you for using ApnaServo.", accent: AppTheme.green)
+            VStack(spacing: 11) {
+                Image(systemName: "star.circle.fill")
+                    .font(.system(size: 45))
+                    .foregroundStyle(AppTheme.booking)
+                Text("Rate your service partner").font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.ink)
+                Text("Your feedback helps us improve").font(.system(size: 12)).foregroundStyle(AppTheme.muted)
+                HStack(spacing: 8) {
+                    ForEach(1...5, id: \.self) { value in
+                        Button {
+                            if store.submittedRatings[booking.id] == nil { rating = value }
+                        } label: {
+                            Image(systemName: value <= displayedRating ? "star.fill" : "star")
+                                .font(.system(size: 30))
+                                .foregroundStyle(value <= displayedRating ? Color(hex: 0xF4B400) : AppTheme.line)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button(store.submittedRatings[booking.id] == nil ? "Submit Rating" : "Rating Submitted") {
+                    store.submitServiceRating(rating)
+                }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(store.submittedRatings[booking.id] == nil ? AppTheme.booking : AppTheme.green)
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(store.submittedRatings[booking.id] == nil ? AppTheme.booking.opacity(0.5) : AppTheme.green.opacity(0.5), lineWidth: 1))
+                .disabled(rating == 0 || store.bookingActionInFlight || store.submittedRatings[booking.id] != nil)
+            }
+            .flowPanel()
+            Button("Go to Home") { store.navigate(.home, remember: false) }
+                .outlineCTA()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+    }
+
+    private var displayedRating: Int {
+        store.submittedRatings[booking.id] ?? rating
+    }
+}
+
+private struct ClosedBookingPage: View {
+    @EnvironmentObject private var store: UserAppStore
+    let booking: Booking
+
+    var body: some View {
+        VStack(spacing: 16) {
+            BookingStateHero(icon: "xmark.circle.fill", title: booking.statusTitle, subtitle: "This booking is closed and remains available in your booking history.", accent: .red)
+            BookingDetailsPanel(booking: booking, showsAmount: false)
+            Button("View My Bookings") { store.navigate(.bookings, remember: false) }
+                .outlineCTA()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 34)
+    }
+}
+
+private struct FlowNotice: View {
+    let icon: String
+    let title: String
+    let message: String
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(accent)
+                .frame(width: 48, height: 48)
+                .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.ink)
+                Text(message).font(.system(size: 12)).foregroundStyle(AppTheme.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(15)
+        .background(accent.opacity(0.045), in: RoundedRectangle(cornerRadius: 17))
+        .overlay(RoundedRectangle(cornerRadius: 17).stroke(accent.opacity(0.16), lineWidth: 1))
+    }
+}
+
+private extension View {
+    func flowPanel() -> some View {
+        self
+            .padding(16)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.line, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.04), radius: 7, y: 3)
+    }
+
+    func flowActionStyle(color: Color) -> some View {
+        self
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13).stroke(color.opacity(0.28), lineWidth: 1))
     }
 }
 

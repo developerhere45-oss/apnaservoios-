@@ -52,6 +52,8 @@ final class UserAppStore: ObservableObject {
     @Published var paymentInfoExpanded = false
     @Published var aboutInfoExpanded = false
     @Published var isBookingSubmitting = false
+    @Published var bookingActionInFlight = false
+    @Published var submittedRatings: [String: Int] = [:]
     @Published var selectedCommercialServiceTitle = "Commercial AC Service"
     @Published var selectedCommercialServiceId = "ac"
 
@@ -59,13 +61,19 @@ final class UserAppStore: ObservableObject {
     let categories = ServiceCatalog.categories
     private let api = APIClient()
     private let secureStore = SecureStore()
+    private let defaults = UserDefaults.standard
     private let notificationService = AppNotificationService.shared
     private var bookingPollingTask: Task<Void, Never>?
     private var fcmTokenObserver: NSObjectProtocol?
     private var notificationOpenObserver: NSObjectProtocol?
     private var pendingNotificationDeepLink: AppNotificationDeepLink?
+    private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
 
     init() {
+        if let data = defaults.data(forKey: submittedRatingsKey),
+           let saved = try? JSONDecoder().decode([String: Int].self, from: data) {
+            submittedRatings = saved
+        }
         fcmTokenObserver = NotificationCenter.default.addObserver(forName: .apnaServoUserFCMTokenUpdated, object: nil, queue: .main) { [weak self] notification in
             guard let token = notification.object as? String, !token.isEmpty else { return }
             Task { @MainActor in
@@ -299,18 +307,6 @@ final class UserAppStore: ObservableObject {
         }
     }
 
-    func assignPartner() {
-        guard var booking = latestBooking else { return }
-        booking.status = "accepted"
-        booking.partnerName = "Rahul Kumar"
-        latestBooking = booking
-        upsertBooking(booking)
-        addNotification(title: "Partner assigned", body: "\(booking.partnerName) accepted \(booking.displayId). Track live status now.", type: "partner_assigned", bookingId: booking.id)
-        bookingChatMessages = [
-            ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat directly with Rahul Kumar. Keep payments and service details inside ApnaServo.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
-        ]
-    }
-
     func openTrack(_ booking: Booking? = nil) {
         if let booking {
             latestBooking = booking
@@ -319,34 +315,102 @@ final class UserAppStore: ObservableObject {
         navigate(.track)
     }
 
-    func advanceBookingStatus() {
-        guard var booking = latestBooking else { return }
-        let flow = ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"]
-        let currentIndex = flow.firstIndex(of: booking.status) ?? 0
-        let next = flow[min(currentIndex + 1, flow.count - 1)]
-        booking.status = next
-        if next == "amount_pending" {
-            booking.finalAmount = max(booking.defaultAmount, 699)
-            booking.quoteStatus = "pending_customer"
-        }
-        latestBooking = booking
-        upsertBooking(booking)
-    }
-
     func approveAmount() {
-        guard var booking = latestBooking else { return }
-        booking.quoteStatus = "payment_submitted"
-        latestBooking = booking
-        upsertBooking(booking)
-        toastMessage = "Payment sent for partner verification."
+        guard let booking = latestBooking, !bookingActionInFlight else { return }
+        guard booking.status == "amount_pending", booking.amount > 0 else {
+            toastMessage = "Partner final amount is not ready yet."
+            return
+        }
+        if booking.quoteExpiresAtMillis > 0,
+           booking.quoteExpiresAtMillis <= Int64(Date().timeIntervalSince1970 * 1000) {
+            toastMessage = "This quote expired. Ask the partner for a fresh amount."
+            return
+        }
+        guard ["pending", "pending_customer"].contains(booking.quoteStatus) else {
+            if booking.quoteStatus == "payment_submitted" {
+                toastMessage = "Payment is already waiting for partner verification."
+            } else {
+                toastMessage = "This payment request is not active."
+            }
+            return
+        }
+        bookingActionInFlight = true
         Task {
             do {
                 let live = try await api.submitDirectPayment(bookingId: booking.id, token: apiToken)
                 latestBooking = live
                 upsertBooking(live)
+                toastMessage = "Payment submitted. Waiting for partner verification."
             } catch {
                 toastMessage = "Payment update could not be sent. Please try again."
             }
+            bookingActionInFlight = false
+        }
+    }
+
+    func sendCounterOffer(amount: Int, message: String) {
+        guard let booking = latestBooking, !bookingActionInFlight else { return }
+        guard booking.status == "amount_pending", amount > 0 else {
+            toastMessage = "Enter a valid counter amount."
+            return
+        }
+        bookingActionInFlight = true
+        Task {
+            do {
+                let live = try await api.counterOfferQuote(booking.id, amount: amount, message: message, token: apiToken)
+                latestBooking = live
+                upsertBooking(live)
+                toastMessage = "Counter offer sent to \(booking.partnerName)."
+            } catch {
+                toastMessage = "Counter offer could not be sent. Please retry."
+            }
+            bookingActionInFlight = false
+        }
+    }
+
+    func cancelLatestBooking() {
+        guard let booking = latestBooking, booking.canCustomerCancel, !bookingActionInFlight else {
+            toastMessage = "This booking can no longer be cancelled from the app."
+            return
+        }
+        bookingActionInFlight = true
+        Task {
+            do {
+                let live = try await api.updateBookingStatus(booking.id, status: "cancelled", finalAmount: 0, token: apiToken)
+                latestBooking = live
+                upsertBooking(live)
+                stopBookingPolling()
+                navigate(.bookings, remember: false)
+                toastMessage = "Booking cancelled successfully."
+            } catch {
+                toastMessage = "Booking cancellation failed. Please retry."
+            }
+            bookingActionInFlight = false
+        }
+    }
+
+    func callPartner(_ booking: Booking) {
+        let digits = booking.partnerPhone.filter(\.isNumber)
+        guard !digits.isEmpty, let url = URL(string: "tel://\(digits)") else {
+            toastMessage = "Partner phone number is not available yet."
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    func submitServiceRating(_ rating: Int, comment: String = "") {
+        guard let booking = latestBooking, booking.status == "completed", (1...5).contains(rating), !bookingActionInFlight else { return }
+        bookingActionInFlight = true
+        Task {
+            do {
+                try await api.submitReview(bookingId: booking.id, rating: rating, comment: comment, token: apiToken)
+                submittedRatings[booking.id] = rating
+                persistSubmittedRatings()
+                toastMessage = "Thank you. Your rating was submitted."
+            } catch {
+                toastMessage = "Rating could not be submitted. Please retry."
+            }
+            bookingActionInFlight = false
         }
     }
 
@@ -501,6 +565,8 @@ final class UserAppStore: ObservableObject {
         profile = UserProfile()
         latestBooking = nil
         bookings = []
+        submittedRatings = [:]
+        defaults.removeObject(forKey: submittedRatingsKey)
         previousScreens = []
         screen = .login
     }
@@ -548,8 +614,13 @@ final class UserAppStore: ObservableObject {
         bookingPollingTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshLatestBooking()
+                guard let status = self?.latestBooking?.status,
+                      !["completed", "cancelled", "rejected"].contains(status) else {
+                    break
+                }
                 try? await Task.sleep(nanoseconds: AppConfig.bookingStatusRefreshSeconds)
             }
+            self?.bookingPollingTask = nil
         }
     }
 
@@ -576,6 +647,12 @@ final class UserAppStore: ObservableObject {
             bookings[index] = booking
         } else {
             bookings.insert(booking, at: 0)
+        }
+    }
+
+    private func persistSubmittedRatings() {
+        if let data = try? JSONEncoder().encode(submittedRatings) {
+            defaults.set(data, forKey: submittedRatingsKey)
         }
     }
 

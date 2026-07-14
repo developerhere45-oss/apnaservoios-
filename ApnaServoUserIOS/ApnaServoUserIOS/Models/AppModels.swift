@@ -157,9 +157,9 @@ struct Booking: Identifiable, Codable, Hashable {
         case "accepted": return "Partner Assigned"
         case "on_the_way": return "Partner On The Way"
         case "arrived": return "Partner Arrived"
-        case "started": return "Service Started"
-        case "amount_pending": return "Approve Amount"
-        case "completed": return "Completed"
+        case "started": return "Work in Progress"
+        case "amount_pending": return quoteStatus == "payment_submitted" ? "Payment Verification" : "Service Completed"
+        case "completed": return "Service Completed"
         case "cancelled": return "Cancelled"
         case "rejected": return "Rejected"
         default: return status.replacingOccurrences(of: "_", with: " ").capitalized
@@ -168,6 +168,14 @@ struct Booking: Identifiable, Codable, Hashable {
 
     var timeline: [String] {
         ["pending", "accepted", "on_the_way", "arrived", "started", "completed"]
+    }
+
+    var canCustomerCancel: Bool {
+        ["pending", "accepted"].contains(status)
+    }
+
+    var isWaitingForPaymentVerification: Bool {
+        status == "amount_pending" && quoteStatus == "payment_submitted"
     }
 
     init(
@@ -203,7 +211,7 @@ struct Booking: Identifiable, Codable, Hashable {
         self.address = address
         self.city = city
         self.slot = slot
-        self.status = status
+        self.status = Self.normalizedStatus(status)
         self.partnerId = partnerId
         self.partnerName = partnerName
         self.partnerPhone = partnerPhone
@@ -230,7 +238,7 @@ struct Booking: Identifiable, Codable, Hashable {
         address = c.string("address", "location", fallback: "Address pending")
         city = c.string("city", fallback: AppConfig.defaultCity)
         slot = c.string("slot", "time", fallback: "Slot pending")
-        status = c.string("status", fallback: "pending")
+        status = Self.normalizedStatus(c.string("status", fallback: "pending"))
         partnerId = c.string("partnerId", "assignedPartnerId")
         partnerName = c.string("partnerName", "assignedPartnerName", fallback: "ApnaServo Partner")
         partnerPhone = c.string("partnerPhone")
@@ -245,6 +253,21 @@ struct Booking: Identifiable, Codable, Hashable {
         lat = c.double("lat", fallback: AppConfig.defaultLatitude)
         lng = c.double("lng", fallback: AppConfig.defaultLongitude)
         createdAtMillis = c.int64("createdAtMillis", "createdAt", fallback: Int64(Date().timeIntervalSince1970 * 1000))
+    }
+
+    private static func normalizedStatus(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "searching", "sent_to_partner", "requested": return "pending"
+        case "assigned", "partner_assigned": return "accepted"
+        case "travelling", "partner_on_way": return "on_the_way"
+        case "reached", "partner_arrived": return "arrived"
+        case "in_progress", "work_started", "service_started": return "started"
+        case "work_completed", "payment_pending", "quoted", "negotiating": return "amount_pending"
+        case "paid", "payment_verified", "service_completed": return "completed"
+        default:
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return clean.isEmpty ? "pending" : clean
+        }
     }
 }
 
