@@ -15,7 +15,6 @@ Package.resolved
 *.p8
 GoogleService-Info.plist
 !ApnaServoUserIOS/ApnaServoUserIOS/GoogleService-Info.plist
-!ApnaServoPartnerIOS/ApnaServoPartnerIOS/GoogleService-Info.plist
 
 # macOS
 .DS_Store
