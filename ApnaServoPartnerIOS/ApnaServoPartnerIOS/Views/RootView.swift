@@ -28,6 +28,39 @@ struct RootView: View {
         } message: {
             Text(store.infoMessage)
         }
+        .sheet(isPresented: $store.showFinalAmountSheet) {
+            FinalAmountSheet()
+                .presentationDetents([.height(330)])
+        }
+    }
+}
+
+struct FinalAmountSheet: View {
+    @EnvironmentObject private var store: PartnerAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Send Final Amount")
+                .font(.title2.weight(.black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Customer will approve this quote before the booking is completed.")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.muted)
+            TextField("Amount in rupees", text: $store.finalAmountInput)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+            Button("Send for Approval") {
+                store.submitFinalAmount()
+            }
+            .primaryButton()
+            Button("Close") {
+                store.showFinalAmountSheet = false
+            }
+            .outlineButton()
+            Spacer()
+        }
+        .padding(20)
+        .background(AppTheme.bg)
     }
 }
 
@@ -66,7 +99,29 @@ struct PartnerLoginView: View {
                     TextField("Email optional", text: $store.profile.email)
                         .keyboardType(.emailAddress)
                         .textFieldStyle(.roundedBorder)
-                    skillGrid
+                    Picker("Partner type", selection: Binding(
+                        get: { store.role },
+                        set: { store.setRole($0) }
+                    )) {
+                        ForEach(PartnerRole.allCases) { role in
+                            Text(role.label).tag(role)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    if store.role == .individual {
+                        skillGrid
+                    }
+                    if store.role == .laundryOwner {
+                        laundryBusinessFields
+                    }
+                    if store.role == .cleaningStaff {
+                        Label(
+                            "The current Android backend has no Cleaning Staff session API.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.orange)
+                    }
                     Button("Continue") {
                         store.completeLogin()
                     }
@@ -103,5 +158,31 @@ struct PartnerLoginView: View {
                 }
             }
         }
+    }
+
+    private var laundryBusinessFields: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Laundry Business")
+                .font(.headline.weight(.bold))
+            TextField("Shop name", text: businessBinding(\.shopName))
+                .textFieldStyle(.roundedBorder)
+            TextField("Shop license number", text: businessBinding(\.shopLicenseNumber))
+                .textFieldStyle(.roundedBorder)
+            TextField("Shop location", text: businessBinding(\.shopLocation))
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func businessBinding(_ keyPath: WritableKeyPath<LaundryBusiness, String>) -> Binding<String> {
+        Binding(
+            get: { (store.profile.laundryBusiness ?? .empty)[keyPath: keyPath] },
+            set: { value in
+                var business = store.profile.laundryBusiness ?? .empty
+                business[keyPath: keyPath] = value
+                business.ownerName = store.profile.name
+                business.ownerPhone = store.profile.phone
+                store.profile.laundryBusiness = business
+            }
+        )
     }
 }

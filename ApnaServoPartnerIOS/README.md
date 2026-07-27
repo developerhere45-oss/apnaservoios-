@@ -9,8 +9,11 @@ Open `ApnaServoPartnerIOS.xcodeproj` on macOS in Xcode, select the `ApnaServoPar
 ## Included
 
 - Partner login/register profile flow
-- Dashboard with online toggle, stats, new/active bookings
+- Role-specific dashboards for individual, cleaning partner, Laundry owner and Laundry staff
+- Permission-gated navigation, online toggle, stats and new/active bookings
 - Request accept/reject and job lifecycle updates
+- Laundry owner staff creation and order assignment
+- Laundry staff session, assigned jobs and task status updates
 - Partner GPS heartbeat and Apple Maps navigation
 - Bookings, earnings, statement PDF download
 - Notifications, profile tools, documents, verification, services/radius/area

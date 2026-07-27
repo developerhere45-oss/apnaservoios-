@@ -46,7 +46,7 @@ final class APIClient {
     }
 
     func upsertPartnerProfile(_ profile: PartnerProfile, fcmToken: String, token: String) async throws {
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "name": profile.name,
             "phone": profile.phone,
             "email": profile.email,
@@ -70,6 +70,28 @@ final class APIClient {
             "photoUrl": profile.photoURL,
             "faceVerified": profile.faceVerified
         ]
+        if profile.effectiveRole == .laundryOwner {
+            let business = profile.laundryBusiness ?? .empty
+            body["businessType"] = "laundry"
+            body["laundryBusiness"] = [
+                "shopName": business.shopName.isEmpty ? "\(profile.name) Laundry" : business.shopName,
+                "shopLicenseNumber": business.shopLicenseNumber,
+                "shopLocation": business.shopLocation.isEmpty ? profile.serviceArea : business.shopLocation,
+                "ownerName": business.ownerName.isEmpty ? profile.name : business.ownerName,
+                "ownerPhone": business.ownerPhone.isEmpty ? profile.phone : business.ownerPhone,
+                "staffMembers": business.staffMembers.map { staff in
+                    [
+                        "sequence": staff.sequence,
+                        "name": staff.name,
+                        "phone": staff.phone,
+                        "email": staff.email,
+                        "idType": "Company ID",
+                        "role": staff.role,
+                        "photoUrl": staff.photoURL
+                    ] as [String: Any]
+                }
+            ] as [String: Any]
+        }
         let _: EmptyResponse = try await request(path: "/partners/profile", method: "POST", token: token, body: body)
     }
 
@@ -110,6 +132,12 @@ final class APIClient {
     func markNotificationRead(_ notificationId: String, token: String) async {
         guard !notificationId.isEmpty else { return }
         let _: EmptyResponse? = try? await request(path: "/notifications/\(notificationId)/read?role=partner", method: "PATCH", token: token, body: [:])
+    }
+
+    func markAllNotificationsRead(_ notificationIds: [String], token: String) async {
+        for notificationId in notificationIds where !notificationId.isEmpty {
+            await markNotificationRead(notificationId, token: token)
+        }
     }
 
     func setOnline(_ online: Bool, token: String) async throws {
@@ -159,6 +187,72 @@ final class APIClient {
         }
         let envelope: BookingEnvelope = try await request(path: "/bookings/\(bookingId)/status", method: "PATCH", token: token, body: body)
         return envelope.booking ?? PartnerBooking(id: bookingId, serviceName: "Service", issue: "", customerName: "Customer", address: "", slot: "", finalAmount: finalAmount, status: status)
+    }
+
+    func startStaffSession(fcmToken: String, online: Bool, token: String) async throws -> StaffSessionEnvelope {
+        try await request(
+            path: "/partners/staff/session",
+            method: "POST",
+            token: token,
+            body: ["fcmToken": fcmToken, "isOnline": online]
+        )
+    }
+
+    func fetchStaffBookings(token: String) async throws -> StaffSessionEnvelope {
+        try await request(path: "/partners/staff/bookings", token: token)
+    }
+
+    func setStaffOnline(_ online: Bool, fcmToken: String, token: String) async throws -> LaundryStaffMember? {
+        let envelope: LaundryStaffEnvelope = try await request(
+            path: "/partners/staff/online",
+            method: "PATCH",
+            token: token,
+            body: ["isOnline": online, "fcmToken": fcmToken]
+        )
+        return envelope.staff
+    }
+
+    func addLaundryStaff(name: String, phone: String, email: String, token: String) async throws -> [LaundryStaffMember] {
+        let envelope: LaundryStaffEnvelope = try await request(
+            path: "/partners/laundry/staff",
+            method: "POST",
+            token: token,
+            body: [
+                "name": name,
+                "phone": phone,
+                "email": email,
+                "role": "Laundry Staff",
+                "idType": "Company ID",
+                "ownerConfirmed": true
+            ]
+        )
+        return envelope.staffMembers ?? envelope.staff.map { [$0] } ?? []
+    }
+
+    func assignLaundryStaff(bookingId: String, staffSequence: Int, token: String) async throws -> PartnerBooking {
+        let envelope: BookingEnvelope = try await request(
+            path: "/partners/laundry/bookings/\(bookingId)/assign-staff",
+            method: "PATCH",
+            token: token,
+            body: ["staffSequence": staffSequence]
+        )
+        guard let booking = envelope.booking else {
+            throw APIError.badResponse("Assigned order was not returned by the backend.")
+        }
+        return booking
+    }
+
+    func updateStaffBookingStatus(bookingId: String, status: String, token: String) async throws -> PartnerBooking {
+        let envelope: BookingEnvelope = try await request(
+            path: "/partners/staff/bookings/\(bookingId)/status",
+            method: "PATCH",
+            token: token,
+            body: ["status": status]
+        )
+        guard let booking = envelope.booking else {
+            throw APIError.badResponse("Updated staff order was not returned by the backend.")
+        }
+        return booking
     }
 
     func createCallLog(bookingId: String, action: String, reason: String, token: String) async {
@@ -426,13 +520,20 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     func configure() {
         UNUserNotificationCenter.current().delegate = self
         #if canImport(FirebaseMessaging)
+        Messaging.messaging().delegate = self
         fcmToken = Messaging.messaging().fcmToken ?? ""
         #endif
     }
 
     func requestPermission() async -> Bool {
         do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+            return granted
         } catch {
             return false
         }
@@ -442,6 +543,14 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .sound, .badge]
     }
 }
+
+#if canImport(FirebaseMessaging)
+extension AppNotificationService: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        self.fcmToken = fcmToken ?? ""
+    }
+}
+#endif
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()

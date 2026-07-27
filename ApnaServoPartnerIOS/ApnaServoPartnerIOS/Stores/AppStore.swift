@@ -26,7 +26,7 @@ final class PartnerAppStore: ObservableObject {
     private let api = APIClient()
     private let secureStore = SecureStore()
     private let notificationService = AppNotificationService()
-    private let locationService = LocationService()
+    private lazy var locationService = LocationService()
     private let defaults = UserDefaults.standard
     private let profileKey = "apnaservo_partner_profile"
     private let bookingsKey = "apnaservo_partner_bookings"
@@ -43,6 +43,9 @@ final class PartnerAppStore: ObservableObject {
     }
 
     var loggedIn: Bool { profile.isValid }
+    var role: PartnerRole { profile.effectiveRole }
+    var permissions: PartnerPermissions { profile.permissions }
+    var staffMembers: [LaundryStaffMember] { profile.laundryBusiness?.staffMembers ?? [] }
     var pendingBookings: [PartnerBooking] { bookings.filter(\.isPending) }
     var activeBookings: [PartnerBooking] { bookings.filter(\.isActive) }
     var completedBookings: [PartnerBooking] { bookings.filter { $0.status == "completed" } }
@@ -115,7 +118,9 @@ final class PartnerAppStore: ObservableObject {
             await refreshAll()
         }
         startRealtimePolling()
-        startLocationHeartbeat()
+        if !role.isStaff {
+            startLocationHeartbeat()
+        }
     }
 
     func logout() {
@@ -130,7 +135,10 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func syncPartnerProfile() async {
-        guard profile.isValid else { return }
+        guard profile.isValid, !role.isStaff else { return }
+        if role == .laundryOwner, profile.approvalStatus != nil {
+            return
+        }
         do {
             try await api.upsertPartnerProfile(profile, fcmToken: fcmToken, token: backendToken)
         } catch {
@@ -148,6 +156,7 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func fetchRemoteProfile() async {
+        guard !role.isStaff else { return }
         do {
             profile = try await api.fetchPartnerProfile(current: profile, token: backendToken)
             persistProfile()
@@ -164,6 +173,8 @@ final class PartnerAppStore: ObservableObject {
                 try await api.setOnline(profile.online, token: backendToken)
                 await syncPartnerProfile()
             } catch {
+                profile.online.toggle()
+                persistProfile()
                 errorMessage = error.localizedDescription
             }
         }
@@ -200,13 +211,31 @@ final class PartnerAppStore: ObservableObject {
         }
     }
 
+    func markAllNotificationsRead() {
+        let unreadIds = notifications.filter { !$0.isRead }.map(\.id)
+        guard !unreadIds.isEmpty else { return }
+        Task {
+            await api.markAllNotificationsRead(unreadIds, token: authToken)
+            for index in notifications.indices {
+                notifications[index].isRead = true
+            }
+        }
+    }
+
     func openBooking(_ booking: PartnerBooking) {
+        if booking.isPending && !permissions.canAcceptOrReject {
+            errorMessage = "This role cannot accept or reject new booking requests."
+            return
+        }
         selectedBooking = booking
         screen = booking.isPending ? .request : .detail
     }
 
     func acceptSelectedBooking() {
-        guard let booking = selectedBooking else { return }
+        guard permissions.canAcceptOrReject, let booking = selectedBooking else {
+            errorMessage = "This role cannot accept booking requests."
+            return
+        }
         loading = true
         Task {
             do {
@@ -223,7 +252,10 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func rejectSelectedBooking() {
-        guard let booking = selectedBooking else { return }
+        guard permissions.canAcceptOrReject, let booking = selectedBooking else {
+            errorMessage = "This role cannot reject booking requests."
+            return
+        }
         loading = true
         Task {
             do {
@@ -242,7 +274,53 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func updateSelectedStatus(_ status: String) {
-        guard var booking = selectedBooking else { return }
+        guard permissions.canUpdateJobStatus, var booking = selectedBooking else {
+            errorMessage = "This role cannot update job status."
+            return
+        }
+        loading = true
+        Task {
+            do {
+                let updated: PartnerBooking
+                if role == .laundryStaff {
+                    updated = try await api.updateStaffBookingStatus(bookingId: booking.id, status: status, token: authToken)
+                } else if role == .cleaningStaff {
+                    throw APIError.badResponse("Cleaning Staff status API is not present in the Android backend.")
+                } else {
+                    let location = await makeLocationPayload(bookingId: booking.id)
+                    updated = try await api.updateBookingStatus(booking.id, status: status, finalAmount: booking.amount, location: location, token: authToken)
+                }
+                booking = updated
+                upsertBooking(updated)
+                selectedBooking = booking
+                if status == "completed" && role != .laundryStaff {
+                    screen = .bookings
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            loading = false
+        }
+    }
+
+    func requestFinalAmount(_ booking: PartnerBooking) {
+        guard permissions.canUpdateJobStatus, booking.status == "started" else {
+            errorMessage = "Final amount can be sent only after service starts."
+            return
+        }
+        selectedBooking = booking
+        finalAmountInput = booking.amount > 0 ? String(booking.amount) : ""
+        showFinalAmountSheet = true
+    }
+
+    func submitFinalAmount() {
+        guard var booking = selectedBooking,
+              let amount = Int(finalAmountInput),
+              amount > 0 else {
+            errorMessage = "Enter a valid final amount."
+            return
+        }
+        showFinalAmountSheet = false
         loading = true
         Task {
             let location = await makeLocationPayload(bookingId: booking.id)
@@ -250,10 +328,8 @@ final class PartnerAppStore: ObservableObject {
                 let updated = try await api.updateBookingStatus(booking.id, status: status, finalAmount: booking.amount, location: location, token: backendToken)
                 booking = updated
                 upsertBooking(updated)
-                selectedBooking = booking
-                if status == "completed" {
-                    screen = .bookings
-                }
+                selectedBooking = updated
+                infoMessage = "Final amount sent for customer approval."
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -449,7 +525,7 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func sendLocationHeartbeat() async {
-        guard profile.online else { return }
+        guard profile.online, !role.isStaff else { return }
         let payload = await makeLocationPayload(bookingId: activeBookings.first?.id ?? "")
         do {
             try await api.updateLocation(payload, token: backendToken)
@@ -461,12 +537,111 @@ final class PartnerAppStore: ObservableObject {
     }
 
     func setSkill(_ skill: PartnerSkill, selected: Bool) {
+        guard role == .individual else { return }
         if selected {
             profile.skills.insert(skill)
         } else if profile.skills.count > 1 {
             profile.skills.remove(skill)
         }
         persistProfile()
+    }
+
+    func setRole(_ newRole: PartnerRole) {
+        profile.role = newRole
+        profile.sessionRole = newRole.isStaff ? newRole.rawValue : nil
+        profile.businessType = newRole == .laundryOwner ? "laundry" : nil
+        switch newRole {
+        case .individual:
+            if profile.skills.isEmpty || profile.skills == [.cleaning] || profile.skills == [.laundry] {
+                profile.skills = [.ac]
+            }
+            profile.laundryBusiness = nil
+        case .cleaningPartner, .cleaningStaff:
+            profile.skills = [.cleaning]
+            profile.laundryBusiness = nil
+        case .laundryOwner:
+            profile.skills = [.laundry]
+            var business = profile.laundryBusiness ?? .empty
+            if business.shopLocation.isEmpty { business.shopLocation = profile.serviceArea }
+            if business.ownerName.isEmpty { business.ownerName = profile.name }
+            if business.ownerPhone.isEmpty { business.ownerPhone = profile.phone }
+            profile.laundryBusiness = business
+        case .laundryStaff:
+            profile.skills = [.laundry]
+            profile.laundryBusiness = nil
+        }
+        bookings = []
+        selectedBooking = nil
+        persistProfile()
+        persistBookings()
+    }
+
+    func updateLaundryBusiness(
+        shopName: String,
+        licenseNumber: String,
+        shopLocation: String
+    ) {
+        var business = profile.laundryBusiness ?? .empty
+        business.shopName = shopName
+        business.shopLicenseNumber = licenseNumber
+        business.shopLocation = shopLocation
+        business.ownerName = profile.name
+        business.ownerPhone = profile.phone
+        profile.laundryBusiness = business
+        persistProfile()
+    }
+
+    func addLaundryStaff() {
+        guard permissions.canManageStaff else {
+            errorMessage = "Only a Laundry Owner can add staff."
+            return
+        }
+        let name = newStaffName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phone = newStaffPhone.filter(\.isNumber)
+        let email = newStaffEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.count >= 2, phone.count == 10 || email.contains("@") else {
+            errorMessage = "Enter staff name and a valid 10-digit phone or email."
+            return
+        }
+        loading = true
+        Task {
+            do {
+                let members = try await api.addLaundryStaff(name: name, phone: phone, email: email, token: authToken)
+                var business = profile.laundryBusiness ?? .empty
+                business.staffMembers = members
+                profile.laundryBusiness = business
+                newStaffName = ""
+                newStaffPhone = ""
+                newStaffEmail = ""
+                persistProfile()
+                infoMessage = "Laundry staff member added."
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            loading = false
+        }
+    }
+
+    func assign(_ booking: PartnerBooking, to staff: LaundryStaffMember) {
+        guard permissions.canManageStaff else {
+            errorMessage = "Only a Laundry Owner can assign staff."
+            return
+        }
+        loading = true
+        Task {
+            do {
+                let updated = try await api.assignLaundryStaff(
+                    bookingId: booking.id,
+                    staffSequence: staff.sequence,
+                    token: authToken
+                )
+                upsertBooking(updated)
+                infoMessage = "\(booking.displayId) assigned to \(staff.name)."
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            loading = false
+        }
     }
 
     private func makeLocationPayload(bookingId: String) async -> LocationPayload {
@@ -483,14 +658,42 @@ final class PartnerAppStore: ObservableObject {
     }
 
     private func mergeBookings(_ live: [PartnerBooking]) {
-        for booking in live {
-            upsertBooking(booking, persist: false)
-        }
+        bookings = live.sorted { $0.createdAtMillis > $1.createdAtMillis }
         persistBookings()
         if let selected = selectedBooking,
            let updated = bookings.first(where: { $0.id == selected.id }) {
             selectedBooking = updated
         }
+    }
+
+    private func startStaffSession() async {
+        do {
+            let envelope = try await api.startStaffSession(
+                fcmToken: fcmToken,
+                online: profile.online,
+                token: authToken
+            )
+            profile.sessionRole = envelope.sessionRole ?? PartnerRole.laundryStaff.rawValue
+            profile.role = .laundryStaff
+            profile.skills = [.laundry]
+            applyStaffIdentity(envelope.staff)
+            mergeBookings(envelope.bookings ?? [])
+            persistProfile()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applyStaffIdentity(_ staff: LaundryStaffMember?) {
+        guard let staff else { return }
+        profile.name = staff.name
+        profile.phone = staff.phone
+        profile.email = staff.email
+        profile.online = staff.online
+        profile.sessionRole = PartnerRole.laundryStaff.rawValue
+        profile.role = .laundryStaff
+        profile.skills = [.laundry]
+        persistProfile()
     }
 
     private func upsertBooking(_ booking: PartnerBooking, persist: Bool = true) {

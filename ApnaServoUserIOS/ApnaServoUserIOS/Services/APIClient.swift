@@ -170,6 +170,15 @@ final class APIClient {
         let _: EmptyResponse = try await request(path: "/reviews/bookings/\(bookingId)", method: "POST", token: token, body: body)
     }
 
+    func createCallLog(bookingId: String, action: String, token: String) async {
+        let _: EmptyResponse? = try? await request(
+            path: "/bookings/\(bookingId)/calls",
+            method: "POST",
+            token: token,
+            body: ["action": action, "reason": ""]
+        )
+    }
+
     func monitorBookingChat(bookingId: String, message: String, clientMessageId: String, token: String) async {
         guard !bookingId.isEmpty, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let body: [String: Any] = [

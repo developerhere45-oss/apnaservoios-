@@ -17,6 +17,10 @@
 		1A0001010000000000000009 /* BookingChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000009 /* BookingChatView.swift */; };
 		1A000101000000000000000A /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000A /* SharedComponents.swift */; };
 		1A000101000000000000000C /* ImportedAndroidAssets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000C /* ImportedAndroidAssets */; };
+		1A000101000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000D /* Assets.xcassets */; };
+		1A000101000000000000000E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000E /* GoogleService-Info.plist */; };
+		F10001010000000000000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F10002010000000000000001 /* FirebaseCore */; };
+		F10001010000000000000002 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F10002010000000000000002 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +35,8 @@
 		1A000201000000000000000A /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		1A000201000000000000000B /* ApnaServoPartnerIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ApnaServoPartnerIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000201000000000000000C /* ImportedAndroidAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ImportedAndroidAssets; sourceTree = "<group>"; };
+		1A000201000000000000000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1A000201000000000000000E /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -38,6 +44,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10001010000000000000001 /* FirebaseCore in Frameworks */,
+				F10001010000000000000002 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -56,6 +64,8 @@
 		1A0004010000000000000002 /* ApnaServoPartnerIOS */ = {
 			isa = PBXGroup;
 			children = (
+				1A000201000000000000000D /* Assets.xcassets */,
+				1A000201000000000000000E /* GoogleService-Info.plist */,
 				1A0004010000000000000004 /* App */,
 				1A0004010000000000000005 /* Models */,
 				1A0004010000000000000006 /* Services */,
@@ -141,6 +151,10 @@
 			dependencies = (
 			);
 			name = ApnaServoPartnerIOS;
+			packageProductDependencies = (
+				F10002010000000000000001 /* FirebaseCore */,
+				F10002010000000000000002 /* FirebaseMessaging */,
+			);
 			productName = ApnaServoPartnerIOS;
 			productReference = 1A000201000000000000000B /* ApnaServoPartnerIOS.app */;
 			productType = "com.apple.product-type.application";
@@ -169,6 +183,9 @@
 				Base,
 			);
 			mainGroup = 1A0004010000000000000001;
+			packageReferences = (
+				F10003010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			productRefGroup = 1A0004010000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -184,6 +201,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A000101000000000000000C /* ImportedAndroidAssets in Resources */,
+				1A000101000000000000000D /* Assets.xcassets in Resources */,
+				1A000101000000000000000E /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -207,6 +226,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F10003010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = exactVersion;
+				version = 11.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F10002010000000000000001 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10003010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		F10002010000000000000002 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10003010000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A000D010000000000000001 /* Debug */ = {
@@ -327,7 +370,7 @@
 		1A000E010000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -355,7 +398,7 @@
 		1A000E010000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
