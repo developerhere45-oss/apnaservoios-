@@ -6,12 +6,13 @@ import FirebaseCore
 
 @main
 struct ApnaServoUserIOSApp: App {
-    @StateObject private var store = UserAppStore()
+    @StateObject private var store: UserAppStore
 
     init() {
         #if canImport(FirebaseCore)
         FirebaseApp.configure()
         #endif
+        _store = StateObject(wrappedValue: UserAppStore())
     }
 
     var body: some Scene {

@@ -17,6 +17,76 @@ enum PartnerScreen: String {
     case legal
     case support
     case bookingChat
+    case staffManagement
+}
+
+enum PartnerRole: String, CaseIterable, Identifiable, Codable {
+    case individual = "individual"
+    case cleaningPartner = "cleaning_partner"
+    case cleaningStaff = "cleaning_staff"
+    case laundryOwner = "laundry_owner"
+    case laundryStaff = "laundry_staff"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .individual: return "Individual Partner"
+        case .cleaningPartner: return "Cleaning Partner"
+        case .cleaningStaff: return "Cleaning Staff"
+        case .laundryOwner: return "Laundry Owner"
+        case .laundryStaff: return "Laundry Staff"
+        }
+    }
+
+    var isStaff: Bool {
+        self == .cleaningStaff || self == .laundryStaff
+    }
+
+    var isOwner: Bool {
+        self == .laundryOwner
+    }
+}
+
+struct PartnerPermissions: Hashable {
+    let canReceiveRequests: Bool
+    let canAcceptOrReject: Bool
+    let canManageStaff: Bool
+    let canViewEarnings: Bool
+    let canEditServices: Bool
+    let canUpdateJobStatus: Bool
+
+    static func forRole(_ role: PartnerRole) -> PartnerPermissions {
+        switch role {
+        case .individual, .cleaningPartner:
+            return PartnerPermissions(
+                canReceiveRequests: true,
+                canAcceptOrReject: true,
+                canManageStaff: false,
+                canViewEarnings: true,
+                canEditServices: false,
+                canUpdateJobStatus: true
+            )
+        case .laundryOwner:
+            return PartnerPermissions(
+                canReceiveRequests: true,
+                canAcceptOrReject: true,
+                canManageStaff: true,
+                canViewEarnings: true,
+                canEditServices: false,
+                canUpdateJobStatus: false
+            )
+        case .cleaningStaff, .laundryStaff:
+            return PartnerPermissions(
+                canReceiveRequests: false,
+                canAcceptOrReject: false,
+                canManageStaff: false,
+                canViewEarnings: false,
+                canEditServices: false,
+                canUpdateJobStatus: true
+            )
+        }
+    }
 }
 
 enum PartnerSkill: String, CaseIterable, Identifiable, Codable {
@@ -65,6 +135,11 @@ struct PartnerProfile: Codable, Hashable {
     var serviceArea = "Guwahati"
     var lat = AppConfig.defaultLatitude
     var lng = AppConfig.defaultLongitude
+    var role: PartnerRole?
+    var businessType: String?
+    var sessionRole: String?
+    var approvalStatus: String?
+    var laundryBusiness: LaundryBusiness?
 
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -75,6 +150,131 @@ struct PartnerProfile: Codable, Hashable {
     var skillsLabel: String {
         skills.sorted { $0.label < $1.label }.map(\.label).joined(separator: ", ")
     }
+
+    var effectiveRole: PartnerRole {
+        if sessionRole == PartnerRole.laundryStaff.rawValue {
+            return .laundryStaff
+        }
+        if sessionRole == PartnerRole.cleaningStaff.rawValue {
+            return .cleaningStaff
+        }
+        if businessType == "laundry" || role == .laundryOwner {
+            return .laundryOwner
+        }
+        if role == .cleaningPartner || (skills == [.cleaning] && role != .individual) {
+            return .cleaningPartner
+        }
+        return role ?? .individual
+    }
+
+    var permissions: PartnerPermissions {
+        PartnerPermissions.forRole(effectiveRole)
+    }
+}
+
+struct LaundryStaffMember: Identifiable, Codable, Hashable {
+    var sequence: Int
+    var name: String
+    var phone: String
+    var email: String
+    var role: String
+    var photoURL: String
+    var online: Bool
+    var verified: Bool
+
+    var id: Int { sequence }
+
+    init(
+        sequence: Int,
+        name: String,
+        phone: String = "",
+        email: String = "",
+        role: String = "Laundry Staff",
+        photoURL: String = "",
+        online: Bool = false,
+        verified: Bool = false
+    ) {
+        self.sequence = sequence
+        self.name = name
+        self.phone = phone
+        self.email = email
+        self.role = role
+        self.photoURL = photoURL
+        self.online = online
+        self.verified = verified
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: DynamicCodingKey.self)
+        sequence = c.int("sequence", "staffSequence")
+        name = c.string("name", "staffName", fallback: "Staff Member")
+        phone = c.string("phone", "staffPhone")
+        email = c.string("email", "staffEmail")
+        role = c.string("role", fallback: "Laundry Staff")
+        photoURL = c.string("photoUrl", "photoURL")
+        online = c.bool("isOnline", "online")
+        verified = c.bool("verified", "ownerConfirmed", "identityVerified")
+            || c.string("verificationStatus").lowercased() == "verified"
+    }
+}
+
+struct LaundryBusiness: Codable, Hashable {
+    var shopName: String
+    var shopLicenseNumber: String
+    var shopLocation: String
+    var ownerName: String
+    var ownerPhone: String
+    var staffMembers: [LaundryStaffMember]
+
+    static let empty = LaundryBusiness(
+        shopName: "",
+        shopLicenseNumber: "",
+        shopLocation: "",
+        ownerName: "",
+        ownerPhone: "",
+        staffMembers: []
+    )
+
+    init(
+        shopName: String,
+        shopLicenseNumber: String,
+        shopLocation: String,
+        ownerName: String,
+        ownerPhone: String,
+        staffMembers: [LaundryStaffMember]
+    ) {
+        self.shopName = shopName
+        self.shopLicenseNumber = shopLicenseNumber
+        self.shopLocation = shopLocation
+        self.ownerName = ownerName
+        self.ownerPhone = ownerPhone
+        self.staffMembers = staffMembers
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: DynamicCodingKey.self)
+        shopName = c.string("shopName", fallback: "ApnaServo Laundry")
+        shopLicenseNumber = c.string("shopLicenseNumber", "shopLicense")
+        shopLocation = c.string("shopLocation", "location", fallback: AppConfig.defaultCity)
+        ownerName = c.string("ownerName")
+        ownerPhone = c.string("ownerPhone")
+        if let key = DynamicCodingKey(stringValue: "staffMembers") {
+            staffMembers = (try? c.decodeIfPresent([LaundryStaffMember].self, forKey: key)) ?? []
+        } else {
+            staffMembers = []
+        }
+    }
+}
+
+struct LaundryAssignment: Codable, Hashable {
+    var ownerPartnerId: String?
+    var staffSequence: Int?
+    var staffName: String?
+    var staffPhone: String?
+    var taskStatus: String?
+    var assignedAt: String?
+    var startedAt: String?
+    var completedAt: String?
 }
 
 struct PartnerBooking: Identifiable, Codable, Hashable {
@@ -98,12 +298,20 @@ struct PartnerBooking: Identifiable, Codable, Hashable {
     var quoteCounterMessage: String
     var createdAtMillis: Int64
     var completedAtMillis: Int64
+    var laundryAssignment: LaundryAssignment?
 
     var displayId: String { bookingCode.isEmpty ? id : bookingCode }
     var amount: Int { finalAmount > 0 ? finalAmount : defaultAmount }
     var isPending: Bool { status == "pending" }
     var isActive: Bool { ["accepted", "on_the_way", "arrived", "started", "amount_pending"].contains(status) }
     var isFinished: Bool { ["completed", "cancelled", "rejected"].contains(status) }
+    var staffTaskStatus: String {
+        laundryAssignment?.taskStatus?.lowercased() ?? ""
+    }
+
+    var isAssignedToStaff: Bool {
+        laundryAssignment?.staffSequence != nil || !(laundryAssignment?.staffName ?? "").isEmpty
+    }
 
     var statusLabel: String {
         switch status {
@@ -140,7 +348,8 @@ struct PartnerBooking: Identifiable, Codable, Hashable {
         quoteCounterAmount: Int = 0,
         quoteCounterMessage: String = "",
         createdAtMillis: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
-        completedAtMillis: Int64 = 0
+        completedAtMillis: Int64 = 0,
+        laundryAssignment: LaundryAssignment? = nil
     ) {
         self.id = id
         self.bookingCode = bookingCode
@@ -162,6 +371,7 @@ struct PartnerBooking: Identifiable, Codable, Hashable {
         self.quoteCounterMessage = quoteCounterMessage
         self.createdAtMillis = createdAtMillis
         self.completedAtMillis = completedAtMillis
+        self.laundryAssignment = laundryAssignment
     }
 
     init(from decoder: Decoder) throws {
@@ -186,6 +396,11 @@ struct PartnerBooking: Identifiable, Codable, Hashable {
         quoteCounterMessage = c.string("quoteCounterMessage")
         createdAtMillis = c.int64("createdAtMillis", "createdAt", fallback: Int64(Date().timeIntervalSince1970 * 1000))
         completedAtMillis = c.int64("completedAtMillis", "completedAt")
+        if let key = DynamicCodingKey(stringValue: "laundryAssignment") {
+            laundryAssignment = try? c.decodeIfPresent(LaundryAssignment.self, forKey: key)
+        } else {
+            laundryAssignment = nil
+        }
     }
 }
 
@@ -230,7 +445,7 @@ struct PartnerNotificationItem: Identifiable, Codable, Hashable {
         body = c.string("body", "message", fallback: "Booking update received")
         type = c.string("type")
         bookingId = c.string("bookingId")
-        isRead = c.bool("read", "isRead")
+        isRead = c.bool("read", "isRead") || !c.string("readAt").isEmpty
     }
 
     init(id: String, title: String, body: String, type: String, bookingId: String, isRead: Bool) {
@@ -257,6 +472,11 @@ struct PartnerProfileDTO: Decodable {
     let serviceArea: String?
     let photoUrl: String?
     let faceVerified: Bool?
+    let businessType: String?
+    let sessionRole: String?
+    let kycStatus: String?
+    let businessVerificationStatus: String?
+    let laundryBusiness: LaundryBusiness?
 
     func toProfile(fallback: PartnerProfile) -> PartnerProfile {
         var profile = fallback
@@ -270,8 +490,31 @@ struct PartnerProfileDTO: Decodable {
         profile.serviceArea = serviceArea ?? profile.serviceArea
         profile.photoURL = photoUrl ?? profile.photoURL
         profile.faceVerified = faceVerified ?? profile.faceVerified
+        profile.businessType = businessType ?? profile.businessType
+        profile.sessionRole = sessionRole ?? profile.sessionRole
+        profile.approvalStatus = businessVerificationStatus ?? kycStatus ?? profile.approvalStatus
+        profile.laundryBusiness = laundryBusiness ?? profile.laundryBusiness
+        if profile.sessionRole == PartnerRole.laundryStaff.rawValue {
+            profile.role = .laundryStaff
+            profile.skills = [.laundry]
+        } else if profile.businessType == "laundry" {
+            profile.role = .laundryOwner
+            profile.skills = [.laundry]
+        }
         return profile
     }
+}
+
+struct StaffSessionEnvelope: Decodable {
+    let sessionRole: String?
+    let partner: PartnerProfileDTO?
+    let staff: LaundryStaffMember?
+    let bookings: [PartnerBooking]?
+}
+
+struct LaundryStaffEnvelope: Decodable {
+    let staff: LaundryStaffMember?
+    let staffMembers: [LaundryStaffMember]?
 }
 
 struct BookingEnvelope: Decodable {

@@ -337,7 +337,7 @@ struct AppNotificationItem: Identifiable, Codable, Hashable {
         body = c.string("body", "message", fallback: "Booking update received")
         type = c.string("type")
         bookingId = c.string("bookingId")
-        isRead = c.bool("read", "isRead")
+        isRead = c.bool("read", "isRead") || !c.string("readAt").isEmpty
         createdAtMillis = c.int64("createdAtMillis", "createdAt")
     }
 

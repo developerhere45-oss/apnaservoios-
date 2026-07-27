@@ -1167,6 +1167,11 @@ struct BookingDetailsScreen: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
                     BookingSelectedServiceCard()
+                    if store.selectedService.id == "cleaning" {
+                        CleaningBookingOptionsCard()
+                    } else if store.selectedService.id == "laundry" {
+                        LaundryBookingOptionsCard()
+                    }
                     ProblemDetailsCard()
                     DateTimeCard()
                     AddressSelectionCard()
@@ -1180,6 +1185,196 @@ struct BookingDetailsScreen: View {
             }
         }
         .background(AppTheme.bg)
+    }
+}
+
+struct CleaningBookingOptionsCard: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Select Cleaning Type")
+                .font(.system(size: 17, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Choose the type of cleaning service you need")
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.muted)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(store.cleaningTypes, id: \.self) { type in
+                    Button {
+                        store.selectedCleaningType = type
+                    } label: {
+                        VStack(spacing: 7) {
+                            AndroidAssetImage(name: cleaningAsset(type), contentMode: .fit)
+                                .frame(height: 62)
+                            Text(type)
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(AppTheme.ink)
+                                .multilineTextAlignment(.center)
+                                .frame(minHeight: 30)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            store.selectedCleaningType == type ? AppTheme.bookingSoft : Color.white,
+                            in: RoundedRectangle(cornerRadius: 14)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(store.selectedCleaningType == type ? AppTheme.booking : AppTheme.line, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .androidCard(padding: 16, radius: 20)
+    }
+
+    private func cleaningAsset(_ type: String) -> String {
+        switch type {
+        case "Deep Cleaning": return "cleaning_type_deep_art"
+        case "Bathroom Cleaning": return "cleaning_type_bathroom_art"
+        case "Room Cleaning": return "cleaning_type_room_art"
+        default: return "cleaning_type_home_art"
+        }
+    }
+}
+
+struct LaundryBookingOptionsCard: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Select Service Type")
+                .font(.system(size: 17, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Choose the type of laundry service you need")
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.muted)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 9) {
+                ForEach(store.laundryServiceTypes, id: \.self) { type in
+                    Button {
+                        store.selectedLaundryServiceType = type
+                    } label: {
+                        Label(type, systemImage: laundryServiceIcon(type))
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(store.selectedLaundryServiceType == type ? AppTheme.booking : AppTheme.ink)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .background(
+                                store.selectedLaundryServiceType == type ? AppTheme.bookingSoft : Color.white,
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(store.selectedLaundryServiceType == type ? AppTheme.booking : AppTheme.line, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            includedBenefits
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("What would you like to wash?")
+                        .font(.system(size: 15, weight: .black))
+                    Text("\(store.selectedLaundryItems.values.reduce(0, +)) items selected")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                Spacer()
+                Button("Select all") {
+                    store.selectAllLaundryItems()
+                }
+                .font(.system(size: 11, weight: .black))
+                .foregroundStyle(AppTheme.booking)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 82), spacing: 8)], spacing: 8) {
+                ForEach(store.laundryItems, id: \.self) { item in
+                    laundryItem(item)
+                }
+            }
+        }
+        .androidCard(padding: 16, radius: 20)
+    }
+
+    private var includedBenefits: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What's Included in Laundry Service?")
+                .font(.system(size: 13, weight: .black))
+            ForEach(["Premium detergent", "Fabric softener", "Stain removal", "Hygienic cleaning", "Neatly folded & packed"], id: \.self) { benefit in
+                Label(benefit, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func laundryItem(_ item: String) -> some View {
+        let count = store.selectedLaundryItems[item] ?? 0
+        return VStack(spacing: 5) {
+            AndroidAssetImage(name: laundryAsset(item), contentMode: .fit)
+                .frame(width: 42, height: 38)
+            Text(item)
+                .font(.system(size: 9, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(minHeight: 24)
+            HStack(spacing: 7) {
+                Button {
+                    store.updateLaundryItem(item, delta: -1)
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .disabled(count == 0)
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .black))
+                    .frame(minWidth: 14)
+                Button {
+                    store.updateLaundryItem(item, delta: 1)
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+            .font(.system(size: 10, weight: .black))
+            .foregroundStyle(AppTheme.booking)
+        }
+        .padding(7)
+        .frame(maxWidth: .infinity)
+        .background(count > 0 ? AppTheme.bookingSoft : Color.white, in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(count > 0 ? AppTheme.booking : AppTheme.line, lineWidth: 1))
+    }
+
+    private func laundryServiceIcon(_ type: String) -> String {
+        switch type {
+        case "Dry Cleaning": return "sparkles"
+        case "Ironing": return "rectangle.and.hand.point.up.left.fill"
+        case "Wash & Iron": return "washer.fill"
+        default: return "tshirt.fill"
+        }
+    }
+
+    private func laundryAsset(_ item: String) -> String {
+        switch item {
+        case "T-Shirts": return "laundry_item_tshirt"
+        case "Shirts": return "laundry_item_shirt"
+        case "Lowers / Track Pants": return "laundry_item_trackpants"
+        case "Jeans": return "laundry_item_jeans"
+        case "Bed Sheet": return "laundry_item_bedsheet"
+        case "Blanket": return "laundry_item_blanket"
+        case "Pillow Cover": return "laundry_item_pillow_cover"
+        case "Curtain": return "laundry_item_curtain"
+        case "Towel": return "laundry_item_towel"
+        case "Saree": return "laundry_item_saree"
+        case "Suit / Kurta": return "laundry_item_kurta"
+        case "Jacket": return "laundry_item_jacket"
+        case "Shoes": return "laundry_item_shoes"
+        default: return "laundry_basket_reference"
+        }
     }
 }
 
@@ -1433,7 +1628,7 @@ struct BookingConfirmScreen: View {
                 VStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 12) {
                         summaryRow("Service", store.selectedService.name)
-                        summaryRow("Issue", store.draft.problem.isEmpty ? "Service request" : store.draft.problem)
+                        summaryRow("Issue", store.bookingRequestDetails().isEmpty ? "Service request" : store.bookingRequestDetails())
                         summaryRow("Date & Time", "\(store.draft.date), \(store.draft.time)")
                         summaryRow("Address", store.bookingAddressPreview())
                         summaryRow("Service Tier", store.draft.tier.rawValue)
@@ -1748,6 +1943,7 @@ struct BookingPendingDetailsCard: View {
 }
 
 struct PartnerAssignedCard: View {
+    @EnvironmentObject private var store: UserAppStore
     let booking: Booking
 
     var body: some View {
@@ -1775,10 +1971,18 @@ struct PartnerAssignedCard: View {
                     .background(AppTheme.greenSoft, in: Capsule())
             }
             HStack(spacing: 10) {
-                Label("Call", systemImage: "phone.fill")
-                    .outlineCTA()
-                Label("Chat", systemImage: "message.fill")
-                    .outlineCTA()
+                Button {
+                    store.callPartner(booking)
+                } label: {
+                    Label("Call", systemImage: "phone.fill")
+                        .outlineCTA()
+                }
+                Button {
+                    store.openBookingChat(booking)
+                } label: {
+                    Label("Chat", systemImage: "message.fill")
+                        .outlineCTA()
+                }
             }
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.greenSoft)
@@ -1802,6 +2006,9 @@ struct TrackBookingScreen: View {
                         if booking.isAssigned {
                             BookingStatusHeader(booking: booking)
                             PartnerAssignedCard(booking: booking)
+                            if ["cleaning", "laundry"].contains(booking.serviceCategory) {
+                                ServiceSpecificLifecycleCard(booking: booking)
+                            }
                             BookingProgressTimeline(booking: booking)
                             LiveStatusMapCard(booking: booking)
                         } else {
@@ -1818,6 +2025,18 @@ struct TrackBookingScreen: View {
                             }
                             .outlineCTA()
                         }
+                        if ["pending", "accepted", "on_the_way", "arrived"].contains(booking.progressStatus) {
+                            Button("Cancel Booking") {
+                                store.requestCancellation(booking)
+                            }
+                            .outlineCTA()
+                        }
+                        if booking.progressStatus == "completed" {
+                            Button("Rate This Service") {
+                                store.requestReview(booking)
+                            }
+                            .roseCTA()
+                        }
                     }
                     .padding(18)
                     .padding(.bottom, 110)
@@ -1829,6 +2048,84 @@ struct TrackBookingScreen: View {
         }
         .task {
             await store.refreshLiveBookings()
+        }
+    }
+}
+
+struct ServiceSpecificLifecycleCard: View {
+    let booking: Booking
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(booking.serviceCategory == "laundry" ? "Track your laundry" : "Cleaning progress")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundStyle(AppTheme.ink)
+                    Text("Stage \(activeStage) of \(steps.count) - Updates automatically")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                Spacer()
+                Image(systemName: booking.serviceCategory == "laundry" ? "basket.fill" : "house.and.flag.fill")
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 42, height: 42)
+                    .background(AppTheme.bookingSoft, in: Circle())
+            }
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: index < activeStage ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(index < activeStage ? AppTheme.green : AppTheme.line)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(step.title)
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(index < activeStage ? AppTheme.ink : AppTheme.muted)
+                        Text(step.detail)
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    Spacer()
+                }
+            }
+            Label(
+                booking.serviceCategory == "laundry"
+                    ? "Handled only by verified laundry services."
+                    : "Handled only by verified cleaning partners.",
+                systemImage: "checkmark.shield.fill"
+            )
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(AppTheme.green)
+        }
+        .androidCard(padding: 16, radius: 20)
+    }
+
+    private var steps: [(title: String, detail: String)] {
+        if booking.serviceCategory == "laundry" {
+            return [
+                ("Order Confirmed", "Your laundry service confirmed the order."),
+                ("Pickup Partner On the Way", "Your pickup partner is travelling to you."),
+                ("Laundry Picked Up", "Your clothes are being processed safely."),
+                ("Out for Delivery", "Your order is returning to your address."),
+                ("Delivered", "Delivery and payment verification are complete.")
+            ]
+        }
+        return [
+            ("Staff Assigned", "Your verified cleaning team is assigned."),
+            ("On the Way", "Your cleaning partner is travelling to your home."),
+            ("Arrived", "The cleaning team reached your location."),
+            ("Cleaning in Progress", "Your selected cleaning service is underway."),
+            ("Completed", "Review the completed cleaning service.")
+        ]
+    }
+
+    private var activeStage: Int {
+        switch booking.progressStatus {
+        case "accepted": return 1
+        case "on_the_way": return 2
+        case "arrived": return booking.serviceCategory == "laundry" ? 3 : 3
+        case "started": return 4
+        case "amount_pending", "completed": return 5
+        default: return 1
         }
     }
 }
@@ -1977,8 +2274,21 @@ struct AmountApprovalCard: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .frame(height: 42)
-                    .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.green, in: RoundedRectangle(cornerRadius: 14))
                 }
+            }
+            if booking.quoteStatus == "pending" && booking.amount > 0 {
+                Button("Send Counter Offer") {
+                    store.requestCounterOffer(booking)
+                }
+                .outlineCTA()
+            } else if booking.quoteStatus == "countered" {
+                Label(
+                    "Counter offer Rs \(booking.quoteCounterAmount) sent. Waiting for a revised quote.",
+                    systemImage: "clock.fill"
+                )
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.booking)
             }
         }
         .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)

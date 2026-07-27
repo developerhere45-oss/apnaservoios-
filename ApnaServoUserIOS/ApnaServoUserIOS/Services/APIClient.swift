@@ -73,6 +73,12 @@ final class APIClient {
         let _: EmptyResponse? = try? await request(path: path, method: "PATCH", token: token, body: [:])
     }
 
+    func markAllNotificationsRead(_ notificationIds: [String], token: String) async {
+        for notificationId in notificationIds {
+            await markNotificationRead(notificationId, token: token)
+        }
+    }
+
     func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, bookingCode: String, fcmToken: String, token: String) async throws -> Booking {
         let body: [String: Any] = [
             "bookingCode": bookingCode,
@@ -130,15 +136,24 @@ final class APIClient {
         return try await getBooking(bookingId, token: token)
     }
 
-    func submitDirectPayment(_ bookingId: String, token: String) async throws -> Booking {
-        let envelope: BookingEnvelope = try await request(
-            path: "/bookings/\(bookingId)/payment-submitted",
-            method: "POST",
-            token: token,
-            body: [:]
-        )
-        if let booking = envelope.booking {
-            return booking
+    func submitDirectPayment(_ bookingId: String, finalAmount: Int, token: String) async throws -> Booking {
+        do {
+            let envelope: BookingEnvelope = try await request(
+                path: "/bookings/\(bookingId)/payment-submitted",
+                method: "POST",
+                token: token,
+                body: [:]
+            )
+            if let booking = envelope.booking {
+                return booking
+            }
+        } catch {
+            return try await updateBookingStatus(
+                bookingId,
+                status: "completed",
+                finalAmount: finalAmount,
+                token: token
+            )
         }
         return try await getBooking(bookingId, token: token)
     }
@@ -159,6 +174,15 @@ final class APIClient {
     func submitReview(bookingId: String, rating: Int, comment: String, token: String) async throws {
         let body: [String: Any] = ["rating": rating, "comment": comment]
         let _: EmptyResponse = try await request(path: "/reviews/bookings/\(bookingId)", method: "POST", token: token, body: body)
+    }
+
+    func createCallLog(bookingId: String, action: String, token: String) async {
+        let _: EmptyResponse? = try? await request(
+            path: "/bookings/\(bookingId)/calls",
+            method: "POST",
+            token: token,
+            body: ["action": action, "reason": ""]
+        )
     }
 
     func monitorBookingChat(bookingId: String, message: String, clientMessageId: String, token: String) async {
@@ -356,13 +380,20 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     func configure() {
         UNUserNotificationCenter.current().delegate = self
         #if canImport(FirebaseMessaging)
+        Messaging.messaging().delegate = self
         fcmToken = Messaging.messaging().fcmToken ?? ""
         #endif
     }
 
     func requestPermission() async -> Bool {
         do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+            return granted
         } catch {
             return false
         }
@@ -375,6 +406,14 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .sound, .badge]
     }
 }
+
+#if canImport(FirebaseMessaging)
+extension AppNotificationService: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        self.fcmToken = fcmToken ?? ""
+    }
+}
+#endif
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()

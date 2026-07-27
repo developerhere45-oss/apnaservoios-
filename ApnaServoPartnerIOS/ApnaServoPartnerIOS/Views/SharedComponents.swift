@@ -221,8 +221,10 @@ struct PartnerBottomNav: View {
     var body: some View {
         HStack {
             nav("Home", "house.fill", .dashboard)
-            nav("Bookings", "briefcase.fill", .bookings)
-            nav("Earnings", "wallet.pass.fill", .earnings)
+            nav(store.role.isStaff ? "My Jobs" : "Bookings", "briefcase.fill", .bookings)
+            if store.permissions.canViewEarnings {
+                nav("Earnings", "wallet.pass.fill", .earnings)
+            }
             nav("Profile", "person.fill", .profile)
         }
         .padding(.horizontal, 14)

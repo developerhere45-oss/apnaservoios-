@@ -45,6 +45,120 @@ struct RootView: View {
             LegalInformationSheet()
                 .presentationDetents([.large])
         }
+        .sheet(isPresented: $store.showCancelSheet) {
+            CancelBookingSheet()
+                .presentationDetents([.height(330)])
+        }
+        .sheet(isPresented: $store.showCounterOfferSheet) {
+            CounterOfferSheet()
+                .presentationDetents([.height(390)])
+        }
+        .sheet(isPresented: $store.showReviewSheet) {
+            BookingReviewSheet()
+                .presentationDetents([.height(410)])
+        }
+    }
+}
+
+struct CancelBookingSheet: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Cancel Booking")
+                .font(.system(size: 22, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text(store.latestBooking?.displayId ?? "")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.muted)
+            TextField("Reason for cancellation", text: $store.cancelReason, axis: .vertical)
+                .lineLimit(3...5)
+                .textFieldStyle(.roundedBorder)
+            Button("Confirm Cancellation", role: .destructive) {
+                store.cancelLatestBooking()
+            }
+            .roseCTA()
+            Button("Keep Booking") {
+                store.showCancelSheet = false
+            }
+            .outlineCTA()
+            Spacer()
+        }
+        .padding(20)
+        .background(AppTheme.bg)
+    }
+}
+
+struct CounterOfferSheet: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Send counter offer")
+                .font(.system(size: 22, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Partner will review your offer and send a fresh quote.")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.muted)
+            TextField("Your offer amount", text: $store.counterOfferAmount)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+            TextField("Message optional", text: $store.counterOfferMessage, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+            Button("Send Offer") {
+                store.submitCounterOffer()
+            }
+            .roseCTA()
+            Button("Close") {
+                store.showCounterOfferSheet = false
+            }
+            .outlineCTA()
+            Spacer()
+        }
+        .padding(20)
+        .background(AppTheme.bg)
+    }
+}
+
+struct BookingReviewSheet: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rate your service")
+                .font(.system(size: 22, weight: .black))
+                .foregroundStyle(AppTheme.ink)
+            Text("Only completed bookings can be reviewed.")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.muted)
+            HStack(spacing: 10) {
+                ForEach(1...5, id: \.self) { rating in
+                    Button {
+                        store.reviewRating = rating
+                    } label: {
+                        Image(systemName: rating <= store.reviewRating ? "star.fill" : "star")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(Color(hex: 0xE69A23))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            TextField("Share your experience", text: $store.reviewComment, axis: .vertical)
+                .lineLimit(3...5)
+                .textFieldStyle(.roundedBorder)
+            Button("Submit Review") {
+                store.submitReview()
+            }
+            .roseCTA()
+            Button("Not Now") {
+                store.showReviewSheet = false
+            }
+            .outlineCTA()
+            Spacer()
+        }
+        .padding(20)
+        .background(AppTheme.bg)
     }
 }
 
