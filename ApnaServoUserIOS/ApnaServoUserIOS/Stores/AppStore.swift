@@ -462,6 +462,9 @@ final class UserAppStore: ObservableObject {
             toastMessage = "Partner phone number is not available yet."
             return
         }
+        Task {
+            await api.createCallLog(bookingId: booking.id, action: "start", token: apiToken)
+        }
         UIApplication.shared.open(url)
     }
 
@@ -489,32 +492,6 @@ final class UserAppStore: ObservableObject {
         latestBooking = booking
         cancelReason = ""
         showCancelSheet = true
-    }
-
-    func cancelLatestBooking() {
-        guard let booking = latestBooking else { return }
-        let reason = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard reason.count >= 3 else {
-            toastMessage = "Please enter a cancellation reason."
-            return
-        }
-        showCancelSheet = false
-        Task {
-            do {
-                let updated = try await api.updateBookingStatus(
-                    booking.id,
-                    status: "cancelled",
-                    finalAmount: booking.amount,
-                    token: authToken
-                )
-                latestBooking = updated
-                upsertBooking(updated)
-                toastMessage = "Booking cancelled."
-                await refreshLiveBookings()
-            } catch {
-                toastMessage = error.localizedDescription
-            }
-        }
     }
 
     func requestCounterOffer(_ booking: Booking) {
@@ -596,18 +573,6 @@ final class UserAppStore: ObservableObject {
         guard latestBooking != nil else { return }
         navigate(.bookingChat)
         Task { await loadBookingChat() }
-    }
-
-    func callPartner(_ booking: Booking) {
-        let digits = booking.partnerPhone.filter(\.isNumber)
-        guard !digits.isEmpty, let url = URL(string: "tel://\(digits)") else {
-            toastMessage = "Partner phone is not available yet."
-            return
-        }
-        Task {
-            await api.createCallLog(bookingId: booking.id, action: "start", token: authToken)
-        }
-        UIApplication.shared.open(url)
     }
 
     func sendBookingChat(_ text: String) {
