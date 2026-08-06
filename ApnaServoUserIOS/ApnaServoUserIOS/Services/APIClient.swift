@@ -538,6 +538,23 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    func address(for coordinate: CLLocationCoordinate2D) async -> String {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location),
+              let placemark = placemarks.first else {
+            return "Current location"
+        }
+        let parts = [
+            placemark.subLocality,
+            placemark.locality,
+            placemark.administrativeArea,
+            placemark.postalCode
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        return parts.isEmpty ? "Current location" : parts.joined(separator: ", ")
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let coordinate = locations.last?.coordinate ?? CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
         continuation?.resume(returning: coordinate)

@@ -224,7 +224,7 @@ struct ProfileSettingsSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Settings")
                 .font(.system(size: 22, weight: .bold))
-            Toggle("Payment reminders", isOn: $store.paymentInfoExpanded)
+            Toggle("Service completion reminders", isOn: $store.paymentInfoExpanded)
             Toggle("About ApnaServo tips", isOn: $store.aboutInfoExpanded)
             Divider()
             Button("Close") { store.showSettingsSheet = false }

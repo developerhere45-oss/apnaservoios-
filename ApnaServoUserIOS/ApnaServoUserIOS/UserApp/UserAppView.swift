@@ -183,116 +183,183 @@ struct LoginScreen: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    ZStack(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ZStack(alignment: .topLeading) {
                         AndroidAssetImage(name: "login_home_repair_hero", contentMode: .fill)
-                            .frame(height: min(430, proxy.size.height * 0.54))
-                            .frame(maxWidth: .infinity)
+                            .frame(width: proxy.size.width, height: min(292, proxy.size.height * 0.34))
                             .clipped()
-                        LinearGradient(colors: [.clear, AppTheme.loginBg.opacity(0.95)], startPoint: .center, endPoint: .bottom)
+                        LinearGradient(
+                            colors: [AppTheme.loginBg.opacity(0.48), .clear, AppTheme.loginBg],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                         VStack(alignment: .leading, spacing: 10) {
                             AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
-                                .frame(width: 184, height: 57)
+                                .frame(width: 174, height: 54)
                             Text("Trusted Home Repair Services")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppTheme.muted)
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
+                        .padding(.leading, 28)
+                        .padding(.top, 46)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 0))
 
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("Trusted")
                                 .foregroundStyle(AppTheme.ink)
-                            Text("Home")
-                                .foregroundStyle(AppTheme.ink)
-                            Text("Repair")
+                            Text("Home Repair")
                                 .foregroundStyle(AppTheme.loginRose)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
                             Text("Services")
-                                .foregroundStyle(AppTheme.loginRose)
+                                .foregroundStyle(AppTheme.ink)
                         }
-                        .font(.system(size: 40, weight: .black))
-                        .lineSpacing(-4)
+                        .font(.system(size: 44, weight: .regular, design: .serif))
+                        .lineSpacing(-2)
 
-                        Text("Book verified experts for AC, plumber, electrician, laundry, cleaning, RO and roadside help.")
-                            .font(.system(size: 14))
+                        Text("Book verified experts for AC, plumber, electrician, laundry, roadside help and more.")
+                            .font(.system(size: 15))
                             .foregroundStyle(AppTheme.muted)
-                            .lineSpacing(3)
+                            .lineSpacing(2)
+
+                        HStack(spacing: 0) {
+                            trustItem("Verified", "Experts", icon: "checkmark.shield.fill")
+                            trustDivider
+                            trustItem("On-Time", "Service", icon: "clock.fill")
+                            trustDivider
+                            trustItem("Quality", "Assured", icon: "medal.fill")
+                        }
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.62), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.line, lineWidth: 1))
 
                         VStack(spacing: 10) {
-                            loginButton("Continue with Email", systemImage: "envelope.fill") {
+                            loginButton("Continue with Email", systemImage: "envelope.fill", primary: true) {
                                 store.beginLogin("Email")
                             }
-                            loginButton("Continue with Phone", systemImage: "phone.fill") {
+                            loginButton("Continue with Phone", systemImage: "phone.fill", primary: false) {
                                 store.beginLogin("Phone")
                             }
-                            loginButton("Continue with Google", systemImage: "g.circle.fill") {
-                                store.loginMode = "Email"
-                                store.completeLogin(name: "ApnaServo Customer", value: "customer@apnaservo.app")
-                            }
+                            googleButton
                         }
 
-                        HStack(spacing: 10) {
-                            trustPill("Verified experts")
-                            trustPill("No upfront pay")
-                            trustPill("Live tracking")
-                        }
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "shield.checkered")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(AppTheme.loginRose)
-                                .frame(width: 48, height: 48)
-                                .background(AppTheme.bookingSoft, in: Circle())
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Your home is in safe hands")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(AppTheme.ink)
-                                Text("Same design language as Android: warm background, rose CTAs and compact cards.")
-                                    .font(.system(size: 12))
+                        Button {
+                            store.toastMessage = "Terms of Service and Privacy Policy are available from Profile > Legal."
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("By continuing, you agree to our")
                                     .foregroundStyle(AppTheme.muted)
+                                Text("Terms & Privacy Policy")
+                                    .foregroundStyle(AppTheme.loginRoseDark)
                             }
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(maxWidth: .infinity)
                         }
-                        .androidCard(padding: 14, radius: 18)
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 28)
+                    .padding(.horizontal, 26)
+                    .padding(.top, 2)
+                    .padding(.bottom, 22)
                 }
+                .frame(width: proxy.size.width, alignment: .leading)
             }
             .background(AppTheme.loginBg)
             .ignoresSafeArea(edges: .top)
         }
     }
 
-    private func loginButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func loginButton(_ title: String, systemImage: String, primary: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
-                    .frame(width: 22)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(primary ? Color.white : AppTheme.loginRoseDark)
+                    .frame(width: 40, height: 40)
+                    .background(primary ? Color.white.opacity(0.15) : Color.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 Text(title)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
             }
-            .foregroundStyle(AppTheme.ink)
-            .font(.system(size: 15, weight: .bold))
-            .padding(.horizontal, 16)
-            .frame(height: 54)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
+            .foregroundStyle(primary ? Color.white : AppTheme.ink)
+            .font(.system(size: 16, weight: .bold))
+            .padding(.horizontal, 14)
+            .frame(height: 60)
+            .background {
+                if primary {
+                    LinearGradient(colors: [Color(hex: 0x7F001D), Color(hex: 0xD71943)], startPoint: .leading, endPoint: .trailing)
+                } else {
+                    Color.white
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(primary ? Color.clear : AppTheme.line, lineWidth: 1))
+            .shadow(color: primary ? AppTheme.loginRose.opacity(0.2) : Color.black.opacity(0.08), radius: 7, y: 4)
         }
         .buttonStyle(.plain)
     }
 
-    private func trustPill(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(AppTheme.loginRose)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(AppTheme.bookingSoft, in: Capsule())
+    private var googleButton: some View {
+        Button {
+            store.loginMode = "Email"
+            store.completeLogin(name: "ApnaServo Customer", value: "customer@apnaservo.app")
+        } label: {
+            HStack(spacing: 12) {
+                Text("G")
+                    .font(.system(size: 19, weight: .black))
+                    .foregroundStyle(
+                        AngularGradient(
+                            colors: [
+                                Color(hex: 0xEA4335),
+                                Color(hex: 0xFBBC05),
+                                Color(hex: 0x34A853),
+                                Color(hex: 0x4285F4),
+                                Color(hex: 0xEA4335)
+                            ],
+                            center: .center
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                Text("Continue with Google")
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.loginRoseDark)
+            }
+            .foregroundStyle(AppTheme.ink)
+            .font(.system(size: 16, weight: .bold))
+            .padding(.horizontal, 14)
+            .frame(height: 60)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.08), radius: 7, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func trustItem(_ title: String, _ subtitle: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppTheme.loginRoseDark)
+                .frame(width: 38, height: 38)
+                .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                Text(subtitle)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(AppTheme.ink)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var trustDivider: some View {
+        Rectangle()
+            .fill(AppTheme.line)
+            .frame(width: 1, height: 42)
     }
 }
 
@@ -339,59 +406,75 @@ struct HomeScreen: View {
     @EnvironmentObject private var store: UserAppStore
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 18) {
-                HomeHero()
-                QuickServiceStrip()
-                CommercialHomeCard()
-                ServiceGridSection(title: "Popular Services", services: Array(store.services.prefix(6)))
-                if !store.bookings.isEmpty {
-                    RecentBookingSection()
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    HomeHero()
+                        .frame(width: proxy.size.width)
+                    VStack(spacing: 18) {
+                        QuickServiceStrip()
+                        CommercialHomeCard()
+                        ServiceGridSection(title: "Popular Services", services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"]))
+                        if !store.bookings.isEmpty {
+                            RecentBookingSection()
+                        }
+                        ServiceGridSection(title: "More Services", services: homeServices(["roadside", "painting", "interior", "ro", "pest", "appliances"]))
+                        WhyChooseCard()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+                    .padding(.bottom, 130)
                 }
-                ServiceGridSection(title: "More Services", services: Array(store.services.dropFirst(6)))
-                WhyChooseCard()
+                .frame(width: proxy.size.width)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 10)
-            .padding(.bottom, 130)
+            .background(AppTheme.bg)
         }
-        .background(AppTheme.bg)
+    }
+
+    private func homeServices(_ ids: [String]) -> [ServiceItem] {
+        ids.map { id in
+            store.services.first(where: { $0.id == id }) ?? ServiceCatalog.service(id: id)
+        }
     }
 }
 
 struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
+    @State private var slideIndex = 0
+
+    private let slideIds = ["ro", "ac", "electrician", "plumbing", "laundry", "roadside"]
+
+    private var service: ServiceItem {
+        ServiceCatalog.service(id: slideIds[slideIndex % slideIds.count])
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
-            AndroidAssetImage(name: "hero_ro_background", contentMode: .fill)
-                .frame(height: 326)
+            AndroidAssetImage(name: heroAsset(service), contentMode: .fill)
+                .id(service.id)
+                .transition(.opacity)
+                .frame(height: 320)
                 .frame(maxWidth: .infinity)
                 .clipped()
-            LinearGradient(colors: [.black.opacity(0.42), .black.opacity(0.10), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(
+                colors: [Color(hex: 0xFFF8F4).opacity(0.98), Color(hex: 0xFFF8F4).opacity(0.75), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(colors: [.white.opacity(0.2), .clear, AppTheme.bg.opacity(0.25)], startPoint: .top, endPoint: .bottom)
 
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 HStack(alignment: .center) {
+                    AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
+                        .frame(width: 36, height: 36)
+                        .rotationEffect(.degrees(-8))
+                    Spacer(minLength: 4)
                     AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
-                        .frame(width: 128, height: 42)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 10)
-                        .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 12))
+                        .frame(width: 154, height: 48)
                     Spacer()
-                    Button {
-                        store.navigate(.notifications)
-                    } label: {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(AppTheme.ink)
-                            .frame(width: 42, height: 42)
-                            .background(.white, in: Circle())
-                            .overlay(alignment: .topTrailing) {
-                                if store.notifications.contains(where: { !$0.isRead }) {
-                                    Circle().fill(AppTheme.booking).frame(width: 10, height: 10)
-                                }
-                            }
-                    }
+                    AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
+                        .frame(width: 36, height: 36)
+                        .rotationEffect(.degrees(8))
                 }
 
                 Button {
@@ -404,9 +487,9 @@ struct HomeHero: View {
                         Spacer()
                     }
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.88))
+                    .foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 15)
-                    .frame(height: 48)
+                    .frame(height: 44)
                     .background(Color(hex: 0x111111).opacity(0.92), in: RoundedRectangle(cornerRadius: 15))
                     .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.12), lineWidth: 1))
                 }
@@ -416,65 +499,91 @@ struct HomeHero: View {
 
                 HStack(alignment: .bottom, spacing: 10) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("RO SERVICE")
-                            .font(.system(size: 24, weight: .black))
-                            .foregroundStyle(.white)
-                        Text("Filter - Leakage - Installation")
+                        Label("VERIFIED SERVICE", systemImage: "checkmark.seal.fill")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(AppTheme.booking)
+                        Text(bannerTitle(service))
+                            .font(.system(size: 27, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.76)
+                        Text(bannerLine(service))
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                        Text("Starts at Rs 299")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.booking.opacity(0.9), in: Capsule())
+                            .foregroundStyle(AppTheme.ink.opacity(0.78))
+                        Text("No upfront payment")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.loginRoseDark)
                     }
+                    .frame(maxWidth: 220, alignment: .leading)
                     Spacer()
                     Button {
-                        store.openService(ServiceCatalog.service(id: "ro"))
+                        store.openService(service)
                     } label: {
-                        Text("Book")
+                        Text("Book Slot  >")
                             .font(.system(size: 13, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 86, height: 42)
-                            .background(AppTheme.booking, in: RoundedRectangle(cornerRadius: 15))
+                            .frame(width: 106, height: 40)
+                            .background(Color(hex: 0x11141A), in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.booking, lineWidth: 1))
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    ForEach(slideIds.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(index == slideIndex ? AppTheme.booking : AppTheme.ink.opacity(0.25))
+                            .frame(width: index == slideIndex ? 18 : 6, height: 6)
                     }
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
         }
-        .frame(height: 326)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 7)
+        .frame(height: 320)
+        .clipped()
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_800_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    slideIndex = (slideIndex + 1) % slideIds.count
+                }
+            }
+        }
     }
 }
 
 struct QuickServiceStrip: View {
     @EnvironmentObject private var store: UserAppStore
-    private let quickIds = ["ac", "electrician", "plumbing", "appliances"]
+    private let quickIds = ["ac", "electrician", "plumbing", "cleaning", "appliances"]
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             ForEach(quickIds, id: \.self) { id in
                 let service = ServiceCatalog.service(id: id)
                 Button {
                     store.openService(service)
                 } label: {
                     VStack(spacing: 7) {
-                        ServiceLogo(service: service, size: 44)
+                        ServiceLogo(service: service, size: 40)
                         Text(service.id == "appliances" ? "Appliance" : service.name.components(separatedBy: " ").first ?? service.name)
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
+                    .padding(.vertical, 9)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(6)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.black.opacity(0.06), radius: 5, y: 3)
     }
 }
 
@@ -1199,7 +1308,7 @@ struct AddressSelectionCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Service Address")
                         .font(.system(size: 17, weight: .black))
-                    Text("Current location or manual address")
+                    Text("Add the exact entrance and property details for your expert.")
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
                 }
@@ -1219,7 +1328,7 @@ struct AddressSelectionCard: View {
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: "shield.fill")
                     .foregroundStyle(AppTheme.green)
-                Text("For safety, share the exact house/flat and landmark before confirming.")
+                Text("House/flat number is required even when your current location is detected.")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.muted)
             }
@@ -1256,12 +1365,6 @@ struct AddressSelectionCard: View {
 
     private var currentAddressFields: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                formField("House / Flat", text: $store.houseFlat)
-                formField("Floor", text: $store.floor)
-            }
-            formField("Building / Area", text: $store.building)
-            formField("Landmark", text: $store.landmark)
             Button {
                 store.useCurrentLocation()
             } label: {
@@ -1276,35 +1379,67 @@ struct AddressSelectionCard: View {
                 .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)
+            labeledFormField("House / Flat number", placeholder: "e.g. House 12 or Flat 3B", text: $store.houseFlat, required: true)
+            labeledFormField("Apartment / Building", placeholder: "Apartment, society or building name", text: $store.building)
+            HStack(alignment: .top, spacing: 10) {
+                labeledFormField("Floor", placeholder: "e.g. 2nd floor", text: $store.floor)
+                labeledFormField("Room number", placeholder: "e.g. Room 204", text: $store.room)
+            }
+            labeledFormField("Landmark", placeholder: "Nearby landmark (optional)", text: $store.landmark)
             MockMapPreview()
         }
     }
 
     private var manualAddressFields: some View {
         VStack(spacing: 10) {
-            formField("House / Flat", text: $store.houseFlat)
-            formField("Building / Street", text: $store.building)
-            formField("Full address", text: $store.draft.address)
-            HStack(spacing: 10) {
-                formField("City", text: $store.city)
-                formField("State", text: $store.state)
+            labeledFormField("Street / Locality / Area", placeholder: "Enter complete service address", text: $store.draft.address, required: true)
+            labeledFormField("House / Flat number", placeholder: "e.g. House 12 or Flat 3B", text: $store.houseFlat, required: true)
+            labeledFormField("Apartment / Building", placeholder: "Apartment, society or building name", text: $store.building)
+            HStack(alignment: .top, spacing: 10) {
+                labeledFormField("Floor", placeholder: "e.g. 2nd floor", text: $store.floor)
+                labeledFormField("Room number", placeholder: "e.g. Room 204", text: $store.room)
             }
-            formField("PIN code", text: $store.pinCode, keyboard: .numberPad)
+            labeledFormField("Landmark", placeholder: "Nearby landmark (optional)", text: $store.landmark)
+            HStack(alignment: .top, spacing: 10) {
+                labeledFormField("City", placeholder: "City", text: $store.city, required: true)
+                labeledFormField("State", placeholder: "State", text: $store.state, required: true)
+            }
+            labeledFormField("PIN code", placeholder: "6-digit PIN code", text: $store.pinCode, required: true, keyboard: .numberPad)
         }
     }
 
-    private func formField(_ placeholder: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
-        TextField(placeholder, text: text)
-            .keyboardType(keyboard)
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 12)
-            .frame(height: 46)
-            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(AppTheme.line, lineWidth: 1))
+    private func labeledFormField(
+        _ label: String,
+        placeholder: String,
+        text: Binding<String>,
+        required: Bool = false,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 2) {
+                Text(label)
+                    .foregroundStyle(AppTheme.ink)
+                if required {
+                    Text("*")
+                        .foregroundStyle(AppTheme.booking)
+                }
+            }
+            .font(.system(size: 11, weight: .bold))
+            TextField(placeholder, text: text)
+                .keyboardType(keyboard)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 12)
+                .frame(height: 46)
+                .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
+                .overlay(RoundedRectangle(cornerRadius: 13).stroke(AppTheme.line, lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct MockMapPreview: View {
+    @EnvironmentObject private var store: UserAppStore
+
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(hex: 0xE5F2EC), Color(hex: 0xFDF7F2)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -1312,10 +1447,12 @@ struct MockMapPreview: View {
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(AppTheme.booking)
-                Text("Ganeshguri, Guwahati")
+                Text(store.draft.hasLocation ? store.draft.address : "Location preview")
                     .font(.system(size: 13, weight: .black))
                     .foregroundStyle(AppTheme.ink)
-                Text("Map preview placeholder")
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                Text(store.draft.hasLocation ? "Current service location" : "Detect your location to continue")
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.muted)
             }
@@ -1341,13 +1478,13 @@ struct BookingConfirmScreen: View {
                         summaryRow("Date & Time", "\(store.draft.date), \(store.draft.time)")
                         summaryRow("Address", store.bookingAddressPreview())
                         summaryRow("Service Tier", store.draft.tier.rawValue)
-                        summaryRow("Estimated Start", store.selectedService.priceLabel)
+                        summaryRow("Booking Charge", "No upfront charge")
                     }
                     .androidCard(padding: 16, radius: 20)
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Image(systemName: "creditcard.fill")
+                            Image(systemName: "shield.checkered")
                                 .foregroundStyle(AppTheme.booking)
                             Text("No upfront payment")
                                 .font(.system(size: 17, weight: .black))
@@ -2362,11 +2499,11 @@ struct ProfileScreen: View {
                     profileAction("Saved Addresses", "Home and service locations", "house.fill") {
                         store.toastMessage = store.profile.address.isEmpty ? "No saved address yet." : store.profile.address
                     }
-                    profileAction("Payments", "No upfront payment enabled", "creditcard.fill") {
+                    profileAction("No Upfront Payment", "Pay only after service and quote approval", "shield.checkered") {
                         store.paymentInfoExpanded.toggle()
                     }
                     if store.paymentInfoExpanded {
-                        Text("Final payment is shown only after partner inspection and customer approval.")
+                        Text("ApnaServo never collects upfront payment. The partner shares the final quote after inspection, and payment is handled only after service with your approval.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)

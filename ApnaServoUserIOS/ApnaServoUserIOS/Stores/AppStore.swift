@@ -232,15 +232,19 @@ final class UserAppStore: ObservableObject {
 
     func useCurrentLocation() {
         addressMode = .current
-        draft.address = "Ganeshguri, Guwahati, Assam 781006"
-        draft.hasLocation = true
-        toastMessage = "Current location detected."
+        draft.address = "Detecting your current service location..."
+        draft.hasLocation = false
+        toastMessage = "Detecting current location..."
         Task {
             let coordinate = await locationService.currentCoordinate()
+            let address = await locationService.address(for: coordinate)
             draft.lat = coordinate.latitude
             draft.lng = coordinate.longitude
+            draft.address = address
+            draft.hasLocation = true
             profile.lat = coordinate.latitude
             profile.lng = coordinate.longitude
+            toastMessage = "Current location detected. Add the required house or flat number."
         }
     }
 
@@ -269,12 +273,14 @@ final class UserAppStore: ObservableObject {
             toastMessage = "Please select a date and time."
             return
         }
+        if houseFlat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            toastMessage = "Enter house or flat number. This is required so the service partner can find your exact entrance."
+            return
+        }
         if addressMode == .current {
             if !draft.hasLocation {
                 useCurrentLocation()
-            }
-            if houseFlat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                toastMessage = "Enter house or flat number."
+                toastMessage = "Wait for current location detection, then confirm again."
                 return
             }
         } else {
