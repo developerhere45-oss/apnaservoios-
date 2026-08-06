@@ -1784,6 +1784,7 @@ private struct PartnerFlowCard: View {
 }
 
 private struct BookingProgressPanel: View {
+    @EnvironmentObject private var store: UserAppStore
     let booking: Booking
     private let steps = [
         ("accepted", "Partner Assigned"),

@@ -467,14 +467,15 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     func refreshFCMToken() async -> String {
         #if canImport(FirebaseMessaging)
         guard FirebaseApp.app() != nil else { return fcmToken }
-        return await withCheckedContinuation { continuation in
+        let refreshedToken: String? = await withCheckedContinuation { continuation in
             Messaging.messaging().token { token, _ in
-                if let token {
-                    self.updateFCMToken(token)
-                }
-                continuation.resume(returning: self.fcmToken)
+                continuation.resume(returning: token)
             }
         }
+        if let refreshedToken {
+            updateFCMToken(refreshedToken)
+        }
+        return fcmToken
         #else
         return fcmToken
         #endif
