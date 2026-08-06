@@ -285,27 +285,65 @@ struct BottomNav: View {
         }
         .frame(height: 80)
         .padding(.horizontal, 12)
-        .background(Color.white)
-        .overlay(Rectangle().fill(AppTheme.line).frame(height: 1), alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [Color.white, Color(hex: 0xFFF9F6)],
+                startPoint: .top,
+                endPoint: .bottom
+            ),
+            in: TopRoundedRectangle(radius: 27)
+        )
+        .overlay {
+            TopRoundedRectangle(radius: 27)
+            .stroke(AppTheme.rose.opacity(0.42), lineWidth: 1)
+        }
         .shadow(color: .black.opacity(0.12), radius: 16, y: -3)
     }
 
     private func nav(_ title: String, _ image: String, _ target: UserScreen) -> some View {
+        let selected = activeTarget == target
         Button {
-            store.navigate(target)
+            store.selectTab(target)
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: image)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 12, weight: store.screen == target ? .bold : .regular))
+                    .font(.system(size: 12, weight: selected ? .bold : .regular))
             }
-            .foregroundStyle(store.screen == target ? AppTheme.rose : Color(hex: 0x707070))
-            .opacity(store.screen == target ? 1 : 0.76)
-            .offset(y: store.screen == target ? -6 : 0)
+            .foregroundStyle(selected ? AppTheme.rose : Color(hex: 0x707070))
+            .opacity(selected ? 1 : 0.76)
+            .offset(y: selected ? -6 : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+    }
+
+    private var activeTarget: UserScreen {
+        switch store.screen {
+        case .home, .services, .detail, .commercial:
+            return .home
+        case .bookings, .track, .bookingChat:
+            return .bookings
+        case .profile, .support, .notifications:
+            return .profile
+        default:
+            return .home
+        }
+    }
+}
+
+private struct TopRoundedRectangle: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            UIBezierPath(
+                roundedRect: rect,
+                byRoundingCorners: [.topLeft, .topRight],
+                cornerRadii: CGSize(width: radius, height: radius)
+            ).cgPath
+        )
     }
 }
 

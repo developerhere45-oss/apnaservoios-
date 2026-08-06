@@ -520,7 +520,8 @@ extension AppNotificationService: MessagingDelegate {
 
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<CLLocationCoordinate2D, Never>?
+    private var continuation: CheckedContinuation<LocationDetectionResult, Never>?
+    private var timeoutWorkItem: DispatchWorkItem?
 
     override init() {
         super.init()
@@ -528,13 +529,36 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
     }
 
-    func currentCoordinate() async -> CLLocationCoordinate2D {
+    func currentLocation() async -> LocationDetectionResult {
         await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            if manager.authorizationStatus == .notDetermined {
-                manager.requestWhenInUseAuthorization()
+            DispatchQueue.main.async {
+                self.startRequest(continuation)
             }
-            manager.requestLocation()
+        }
+    }
+
+    func currentCoordinate() async throws -> CLLocationCoordinate2D {
+        switch await currentLocation() {
+        case .detected(let coordinate):
+            return CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        case .permissionDenied:
+            throw LocationServiceError.permissionDenied
+        case .restricted:
+            throw LocationServiceError.restricted
+        case .unavailable:
+            throw LocationServiceError.unavailable
+        case .failure(let message):
+            throw LocationServiceError.failure(message)
+        }
+    }
+
+    func cancelCurrentRequest() {
+        if Thread.isMainThread {
+            finish(.failure("Location detection was cancelled."))
+        } else {
+            DispatchQueue.main.async {
+                self.finish(.failure("Location detection was cancelled."))
+            }
         }
     }
 
@@ -555,14 +579,107 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         return parts.isEmpty ? "Current location" : parts.joined(separator: ", ")
     }
 
+    func coordinate(for address: String) async -> LocationCoordinate? {
+        guard let placemarks = try? await CLGeocoder().geocodeAddressString(address),
+              let coordinate = placemarks.first?.location?.coordinate else {
+            return nil
+        }
+        return LocationCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        guard continuation != nil else { return }
+        handleAuthorization(manager.authorizationStatus)
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let coordinate = locations.last?.coordinate ?? CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude)
-        continuation?.resume(returning: coordinate)
-        continuation = nil
+        guard let coordinate = locations.last?.coordinate else {
+            finish(.failure("Location data was unavailable. Please retry."))
+            return
+        }
+        finish(.detected(LocationCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)))
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(returning: CLLocationCoordinate2D(latitude: AppConfig.defaultLatitude, longitude: AppConfig.defaultLongitude))
-        continuation = nil
+        if let locationError = error as? CLError, locationError.code == .denied {
+            switch manager.authorizationStatus {
+            case .denied:
+                finish(.permissionDenied)
+            case .restricted:
+                finish(.restricted)
+            default:
+                finish(.unavailable)
+            }
+            return
+        }
+        finish(.failure("Location could not be detected. Please retry."))
+    }
+
+    private func startRequest(_ continuation: CheckedContinuation<LocationDetectionResult, Never>) {
+        guard self.continuation == nil else {
+            continuation.resume(returning: .failure("Location detection is already in progress."))
+            return
+        }
+        self.continuation = continuation
+
+        guard CLLocationManager.locationServicesEnabled() else {
+            finish(.unavailable)
+            return
+        }
+        handleAuthorization(manager.authorizationStatus)
+    }
+
+    private func handleAuthorization(_ status: CLAuthorizationStatus) {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            scheduleTimeout()
+            manager.requestLocation()
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .denied:
+            finish(.permissionDenied)
+        case .restricted:
+            finish(.restricted)
+        @unknown default:
+            finish(.failure("Location authorization could not be determined."))
+        }
+    }
+
+    private func scheduleTimeout() {
+        timeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.finish(.failure("Location is taking longer than expected. Please retry."))
+        }
+        timeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: workItem)
+    }
+
+    private func finish(_ result: LocationDetectionResult) {
+        guard let continuation else { return }
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+        self.continuation = nil
+        manager.stopUpdatingLocation()
+        continuation.resume(returning: result)
+    }
+}
+
+enum LocationServiceError: LocalizedError {
+    case permissionDenied
+    case restricted
+    case unavailable
+    case failure(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            return StartupLocationPhase.permissionDenied.message
+        case .restricted:
+            return StartupLocationPhase.restricted.message
+        case .unavailable:
+            return StartupLocationPhase.unavailable.message
+        case .failure(let message):
+            return message
+        }
     }
 }

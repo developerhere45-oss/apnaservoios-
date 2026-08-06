@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import SwiftUI
 import UIKit
 
@@ -10,10 +11,13 @@ final class UserAppStore: ObservableObject {
         name: "",
         phone: "",
         email: "",
-        address: "House 12, Ganeshguri, Guwahati",
+        address: "",
         lat: AppConfig.defaultLatitude,
         lng: AppConfig.defaultLongitude
     )
+    @Published var startupLocationPhase: StartupLocationPhase = .idle
+    @Published var startupManualAddress = ""
+    @Published var isStartupManualEntry = false
     @Published var activeCategory = "Home Repair"
     @Published var selectedService = ServiceCatalog.service(id: "ro")
     @Published var draft = BookingDraft(
@@ -86,6 +90,8 @@ final class UserAppStore: ObservableObject {
     private let defaults = UserDefaults.standard
     private let notificationService = AppNotificationService.shared
     private var bookingPollingTask: Task<Void, Never>?
+    private var bookingLocationTask: Task<Void, Never>?
+    private var startupLocationTask: Task<Void, Never>?
     private var fcmTokenObserver: NSObjectProtocol?
     private var notificationOpenObserver: NSObjectProtocol?
     private var pendingNotificationDeepLink: AppNotificationDeepLink?
@@ -150,6 +156,12 @@ final class UserAppStore: ObservableObject {
         screen = target
     }
 
+    func selectTab(_ target: UserScreen) {
+        guard [.home, .bookings, .profile].contains(target) else { return }
+        previousScreens.removeAll()
+        screen = target
+    }
+
     func back() {
         while let previous = previousScreens.popLast() {
             if previous != screen {
@@ -175,6 +187,9 @@ final class UserAppStore: ObservableObject {
             profile.phone = value.filter(\.isNumber)
         }
         showLoginSheet = false
+        startupLocationPhase = .idle
+        startupManualAddress = ""
+        isStartupManualEntry = false
         navigate(.startupLocation, remember: false)
         Task {
             _ = await notificationService.requestPermission()
@@ -184,9 +199,117 @@ final class UserAppStore: ObservableObject {
         }
     }
 
-    func finishLocationGate() {
+    func detectStartupLocation() {
+        guard startupLocationTask == nil, startupLocationPhase != .detecting else { return }
+        isStartupManualEntry = false
+        startupLocationPhase = .detecting
+        let service = locationService
+        startupLocationTask = Task { [weak self] in
+            let result = await service.currentLocation()
+            guard let self, !Task.isCancelled else { return }
+            await self.handleStartupLocationResult(result)
+            self.startupLocationTask = nil
+        }
+    }
+
+    func showStartupManualEntry() {
+        startupLocationTask?.cancel()
+        startupLocationTask = nil
+        locationService.cancelCurrentRequest()
+        isStartupManualEntry = true
+        startupLocationPhase = .idle
+    }
+
+    func openLocationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString),
+              UIApplication.shared.canOpenURL(url) else {
+            toastMessage = "Location settings are unavailable on this device."
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    func submitStartupManualLocation() {
+        let address = startupManualAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard address.count >= 5 else {
+            toastMessage = "Enter a complete service location."
+            return
+        }
+        guard startupLocationTask == nil else { return }
+        isStartupManualEntry = false
+        startupLocationPhase = .detecting
+        let service = locationService
+        startupLocationTask = Task { [weak self] in
+            let point = await service.coordinate(for: address)
+            guard let self, !Task.isCancelled else { return }
+            defer { self.startupLocationTask = nil }
+            guard let point else {
+                self.startupLocationPhase = .idle
+                self.isStartupManualEntry = true
+                self.toastMessage = "We could not find that location. Enter a more complete address."
+                return
+            }
+            self.profile.address = address
+            self.profile.lat = point.latitude
+            self.profile.lng = point.longitude
+            self.startupLocationPhase = .detected
+            Task { await self.syncUserProfile() }
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            guard !Task.isCancelled,
+                  self.screen == .startupLocation,
+                  self.startupLocationPhase == .detected else { return }
+            self.completeStartupLocationGate()
+        }
+    }
+
+    func continueWithoutStartupLocation() {
+        startupLocationTask?.cancel()
+        startupLocationTask = nil
+        locationService.cancelCurrentRequest()
+        startupManualAddress = ""
+        isStartupManualEntry = false
+        startupLocationPhase = .idle
+        profile.address = AppConfig.defaultCity
         profile.lat = AppConfig.defaultLatitude
         profile.lng = AppConfig.defaultLongitude
+        completeStartupLocationGate()
+    }
+
+    // Compatibility for the existing location view until it adopts the typed startup API.
+    func finishLocationGate() {
+        detectStartupLocation()
+    }
+
+    private func handleStartupLocationResult(_ result: LocationDetectionResult) async {
+        switch result {
+        case .detected(let point):
+            let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+            let address = await locationService.address(for: coordinate)
+            profile.address = address
+            profile.lat = point.latitude
+            profile.lng = point.longitude
+            startupLocationPhase = .detected
+            Task { await syncUserProfile() }
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            guard !Task.isCancelled,
+                  screen == .startupLocation,
+                  startupLocationPhase == .detected else { return }
+            completeStartupLocationGate()
+        case .permissionDenied:
+            startupLocationPhase = .permissionDenied
+        case .restricted:
+            startupLocationPhase = .restricted
+        case .unavailable:
+            startupLocationPhase = .unavailable
+        case .failure(let message):
+            startupLocationPhase = .failure
+            toastMessage = message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? StartupLocationPhase.failure.message
+                : message
+        }
+    }
+
+    private func completeStartupLocationGate() {
         navigate(.home, remember: false)
         Task { await openPendingNotificationDeepLinkIfNeeded() }
     }
@@ -204,6 +327,9 @@ final class UserAppStore: ObservableObject {
     }
 
     func startBooking(_ service: ServiceItem) {
+        bookingLocationTask?.cancel()
+        bookingLocationTask = nil
+        locationService.cancelCurrentRequest()
         selectedService = service
         draft = BookingDraft(
             problem: "",
@@ -231,24 +357,41 @@ final class UserAppStore: ObservableObject {
     }
 
     func useCurrentLocation() {
+        guard bookingLocationTask == nil else { return }
         addressMode = .current
         draft.address = "Detecting your current service location..."
         draft.hasLocation = false
         toastMessage = "Detecting current location..."
-        Task {
-            let coordinate = await locationService.currentCoordinate()
-            let address = await locationService.address(for: coordinate)
-            draft.lat = coordinate.latitude
-            draft.lng = coordinate.longitude
-            draft.address = address
-            draft.hasLocation = true
-            profile.lat = coordinate.latitude
-            profile.lng = coordinate.longitude
-            toastMessage = "Current location detected. Add the required house or flat number."
+        bookingLocationTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await locationService.currentLocation()
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .detected(let point):
+                let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+                let address = await locationService.address(for: coordinate)
+                guard !Task.isCancelled, addressMode == .current else { return }
+                draft.lat = point.latitude
+                draft.lng = point.longitude
+                draft.address = address
+                draft.hasLocation = true
+                profile.address = address
+                profile.lat = point.latitude
+                profile.lng = point.longitude
+                toastMessage = "Current location detected. Add the required house or flat number."
+            case .permissionDenied, .restricted, .unavailable, .failure:
+                draft.address = "Current location not detected"
+                draft.hasLocation = false
+                toastMessage = result.userMessage
+            }
+            bookingLocationTask = nil
         }
     }
 
     func useManualAddress() {
+        bookingLocationTask?.cancel()
+        bookingLocationTask = nil
+        locationService.cancelCurrentRequest()
         addressMode = .manual
         draft.address = ""
         draft.hasLocation = false
@@ -726,7 +869,15 @@ final class UserAppStore: ObservableObject {
 
     func logout() {
         stopBookingPolling()
+        bookingLocationTask?.cancel()
+        bookingLocationTask = nil
+        startupLocationTask?.cancel()
+        startupLocationTask = nil
+        locationService.cancelCurrentRequest()
         profile = UserProfile()
+        startupLocationPhase = .idle
+        startupManualAddress = ""
+        isStartupManualEntry = false
         latestBooking = nil
         bookings = []
         submittedRatings = [:]

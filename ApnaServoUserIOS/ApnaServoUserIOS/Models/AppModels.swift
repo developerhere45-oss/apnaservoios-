@@ -29,6 +29,83 @@ enum UserScreen: String, CaseIterable {
     case commercialCompleted
 }
 
+enum StartupLocationPhase: Equatable {
+    case idle
+    case detecting
+    case detected
+    case permissionDenied
+    case restricted
+    case unavailable
+    case failure
+
+    var title: String {
+        switch self {
+        case .idle:
+            return "Set your service location"
+        case .detecting:
+            return "Detecting your location"
+        case .detected:
+            return "Location detected"
+        case .permissionDenied:
+            return "Allow location access"
+        case .restricted:
+            return "Location access restricted"
+        case .unavailable:
+            return "Turn on device location"
+        case .failure:
+            return "Location not found yet"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .idle:
+            return "Allow location access to find verified service partners near you."
+        case .detecting:
+            return "Finding the best service area near you..."
+        case .detected:
+            return "Nearby ApnaServo services are ready."
+        case .permissionDenied:
+            return "Location permission was denied. Allow it in Settings, or enter your service location manually."
+        case .restricted:
+            return "Location access is restricted on this device. Enter your service location manually to continue."
+        case .unavailable:
+            return "Device location is unavailable. Turn it on, or enter your service location manually."
+        case .failure:
+            return "Location could not be detected. Retry, or enter your service location manually."
+        }
+    }
+}
+
+struct LocationCoordinate: Equatable, Sendable {
+    let latitude: Double
+    let longitude: Double
+}
+
+enum LocationDetectionResult: Equatable, Sendable {
+    case detected(LocationCoordinate)
+    case permissionDenied
+    case restricted
+    case unavailable
+    case failure(String)
+
+    var userMessage: String {
+        switch self {
+        case .detected:
+            return "Location detected."
+        case .permissionDenied:
+            return StartupLocationPhase.permissionDenied.message
+        case .restricted:
+            return StartupLocationPhase.restricted.message
+        case .unavailable:
+            return StartupLocationPhase.unavailable.message
+        case .failure(let message):
+            let clean = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean.isEmpty ? StartupLocationPhase.failure.message : clean
+        }
+    }
+}
+
 enum BookingAddressMode: String, CaseIterable, Identifiable {
     case current = "current"
     case manual = "manual"
