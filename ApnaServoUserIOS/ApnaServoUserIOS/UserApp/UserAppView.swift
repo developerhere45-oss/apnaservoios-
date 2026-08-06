@@ -241,7 +241,6 @@ struct LoginScreen: View {
                             loginButton("Continue with Phone", systemImage: "phone.fill", primary: false) {
                                 store.beginLogin("Phone")
                             }
-                            googleButton
                         }
 
                         Button {
@@ -296,45 +295,6 @@ struct LoginScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 15).stroke(primary ? Color.clear : AppTheme.line, lineWidth: 1))
             .shadow(color: primary ? AppTheme.loginRose.opacity(0.2) : Color.black.opacity(0.08), radius: 7, y: 4)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var googleButton: some View {
-        Button {
-            store.loginMode = "Email"
-            store.completeLogin(name: "ApnaServo Customer", value: "customer@apnaservo.app")
-        } label: {
-            HStack(spacing: 12) {
-                Text("G")
-                    .font(.system(size: 19, weight: .black))
-                    .foregroundStyle(
-                        AngularGradient(
-                            colors: [
-                                Color(hex: 0xEA4335),
-                                Color(hex: 0xFBBC05),
-                                Color(hex: 0x34A853),
-                                Color(hex: 0x4285F4),
-                                Color(hex: 0xEA4335)
-                            ],
-                            center: .center
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                Text("Continue with Google")
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.loginRoseDark)
-            }
-            .foregroundStyle(AppTheme.ink)
-            .font(.system(size: 16, weight: .bold))
-            .padding(.horizontal, 14)
-            .frame(height: 60)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.08), radius: 7, y: 4)
         }
         .buttonStyle(.plain)
     }

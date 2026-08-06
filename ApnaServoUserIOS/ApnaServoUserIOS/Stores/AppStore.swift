@@ -3,6 +3,10 @@ import CoreLocation
 import SwiftUI
 import UIKit
 
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+
 @MainActor
 final class UserAppStore: ObservableObject {
     @Published var screen: UserScreen = .splash
@@ -54,6 +58,8 @@ final class UserAppStore: ObservableObject {
     @Published var showSettingsSheet = false
     @Published var showEditProfileSheet = false
     @Published var showLegalSheet = false
+    @Published var isAuthenticating = false
+    @Published var isDeletingAccount = false
     @Published var showCancelSheet = false
     @Published var showCounterOfferSheet = false
     @Published var showReviewSheet = false
@@ -179,24 +185,81 @@ final class UserAppStore: ObservableObject {
 
     func completeLogin(name: String, value: String) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        profile.name = cleanName.isEmpty ? "ApnaServo Customer" : cleanName
+        let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            toastMessage = "Enter your full name."
+            return
+        }
         if loginMode == "Email" {
-            profile.email = value
-            if profile.phone.isEmpty { profile.phone = "Not shared" }
+            guard cleanValue.contains("@"), cleanValue.contains(".") else {
+                toastMessage = "Enter a valid email address."
+                return
+            }
         } else {
-            profile.phone = value.filter(\.isNumber)
+            guard cleanValue.filter(\.isNumber).count >= 10 else {
+                toastMessage = "Enter a valid mobile number."
+                return
+            }
         }
-        showLoginSheet = false
-        startupLocationPhase = .idle
-        startupManualAddress = ""
-        isStartupManualEntry = false
-        navigate(.startupLocation, remember: false)
+        guard !isAuthenticating else { return }
+        isAuthenticating = true
         Task {
-            _ = await notificationService.requestPermission()
-            await syncUserProfile()
-            await refreshBookings()
-            await openPendingNotificationDeepLinkIfNeeded()
+            do {
+                let token = try await firebaseSessionToken()
+                secureStore.set(token, for: tokenKey)
+                authToken = token
+                profile.name = cleanName
+                if loginMode == "Email" {
+                    profile.email = cleanValue
+                } else {
+                    profile.phone = cleanValue.filter(\.isNumber)
+                }
+                showLoginSheet = false
+                startupLocationPhase = .idle
+                startupManualAddress = ""
+                isStartupManualEntry = false
+                navigate(.startupLocation, remember: false)
+                _ = await notificationService.requestPermission()
+                await syncUserProfile()
+                await refreshBookings()
+                await openPendingNotificationDeepLinkIfNeeded()
+            } catch {
+                toastMessage = error.localizedDescription
+            }
+            isAuthenticating = false
         }
+    }
+
+    func requestAccountDeletion(reason: String) async -> Bool {
+        guard !isDeletingAccount else { return false }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+        do {
+            try await api.requestAccountDeletion(
+                reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
+                token: apiToken
+            )
+#if canImport(FirebaseAuth)
+            try await Auth.auth().currentUser?.delete()
+#endif
+            logout()
+            return true
+        } catch {
+            toastMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func firebaseSessionToken() async throws -> String {
+        #if canImport(FirebaseAuth)
+        if let current = Auth.auth().currentUser {
+            return try await current.getIDToken()
+        }
+        let result = try await Auth.auth().signInAnonymously()
+        return try await result.user.getIDToken()
+        #else
+        throw APIError.badResponse("Authentication is unavailable in this build.")
+        #endif
     }
 
     func detectStartupLocation() {
@@ -885,6 +948,9 @@ final class UserAppStore: ObservableObject {
         previousScreens = []
         authToken = ""
         secureStore.set("", for: tokenKey)
+#if canImport(FirebaseAuth)
+        try? Auth.auth().signOut()
+#endif
         screen = .login
     }
 

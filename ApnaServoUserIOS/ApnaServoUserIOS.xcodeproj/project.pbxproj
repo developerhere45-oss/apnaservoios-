@@ -14,7 +14,6 @@
 		1A0001010000000000000005 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000005 /* AppStore.swift */; };
 		1A0001010000000000000006 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000006 /* RootView.swift */; };
 		1A0001010000000000000007 /* UserAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000007 /* UserAppView.swift */; };
-		1A0001010000000000000008 /* PartnerAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000008 /* PartnerAppView.swift */; };
 		1A0001010000000000000009 /* BookingChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000009 /* BookingChatView.swift */; };
 		1A000101000000000000000A /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000A /* SharedComponents.swift */; };
 		1A000101000000000000000C /* ImportedAndroidAssets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000C /* ImportedAndroidAssets */; };
@@ -22,6 +21,8 @@
 		1A000101000000000000000E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1A000201000000000000000F /* GoogleService-Info.plist */; };
 		1A0001010000000000000010 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000F010000000000000001 /* FirebaseCore */; };
 		1A0001010000000000000012 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000F010000000000000003 /* FirebaseMessaging */; };
+		1A0001010000000000000013 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 1A000F010000000000000004 /* FirebaseAuth */; };
+		1A0001010000000000000014 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A0002010000000000000010 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,7 +33,6 @@
 		1A0002010000000000000005 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		1A0002010000000000000006 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		1A0002010000000000000007 /* UserAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserAppView.swift; sourceTree = "<group>"; };
-		1A0002010000000000000008 /* PartnerAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartnerAppView.swift; sourceTree = "<group>"; };
 		1A0002010000000000000009 /* BookingChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatView.swift; sourceTree = "<group>"; };
 		1A000201000000000000000A /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		1A000201000000000000000B /* ApnaServoUserIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ApnaServoUserIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -40,6 +40,7 @@
 		1A000201000000000000000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A000201000000000000000E /* ApnaServoUserIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ApnaServoUserIOS.entitlements; sourceTree = "<group>"; };
 		1A000201000000000000000F /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		1A0002010000000000000010 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +48,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A0001010000000000000013 /* FirebaseAuth in Frameworks */,
 				1A0001010000000000000010 /* FirebaseCore in Frameworks */,
 				1A0001010000000000000012 /* FirebaseMessaging in Frameworks */,
 			);
@@ -68,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				1A000201000000000000000D /* Assets.xcassets */,
+				1A0002010000000000000010 /* PrivacyInfo.xcprivacy */,
 				1A000201000000000000000F /* GoogleService-Info.plist */,
 				1A000201000000000000000E /* ApnaServoUserIOS.entitlements */,
 				1A0004010000000000000004 /* App */,
@@ -75,7 +78,6 @@
 				1A0004010000000000000006 /* Services */,
 				1A0004010000000000000007 /* Stores */,
 				1A0004010000000000000009 /* UserApp */,
-				1A000401000000000000000A /* PartnerApp */,
 				1A0004010000000000000008 /* Views */,
 			);
 			path = ApnaServoUserIOS;
@@ -130,14 +132,6 @@
 			path = UserApp;
 			sourceTree = "<group>";
 		};
-		1A000401000000000000000A /* PartnerApp */ = {
-			isa = PBXGroup;
-			children = (
-				1A0002010000000000000008 /* PartnerAppView.swift */,
-			);
-			path = PartnerApp;
-			sourceTree = "<group>";
-		};
 		1A0004010000000000000008 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -167,6 +161,7 @@
 			packageProductDependencies = (
 				1A000F010000000000000001 /* FirebaseCore */,
 				1A000F010000000000000003 /* FirebaseMessaging */,
+				1A000F010000000000000004 /* FirebaseAuth */,
 			);
 			productName = ApnaServoUserIOS;
 			productReference = 1A000201000000000000000B /* ApnaServoUserIOS.app */;
@@ -213,6 +208,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A0001010000000000000014 /* PrivacyInfo.xcprivacy in Resources */,
 				1A000101000000000000000C /* ImportedAndroidAssets in Resources */,
 				1A000101000000000000000D /* Assets.xcassets in Resources */,
 				1A000101000000000000000E /* GoogleService-Info.plist in Resources */,
@@ -233,7 +229,6 @@
 				1A0001010000000000000005 /* AppStore.swift in Sources */,
 				1A0001010000000000000006 /* RootView.swift in Sources */,
 				1A0001010000000000000007 /* UserAppView.swift in Sources */,
-				1A0001010000000000000008 /* PartnerAppView.swift in Sources */,
 				1A0001010000000000000009 /* BookingChatView.swift in Sources */,
 				1A000101000000000000000A /* SharedComponents.swift in Sources */,
 			);
@@ -262,6 +257,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		1A000F010000000000000004 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A000F000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
 		};
 /* End XCSwiftPackageProductDependency section */
 
@@ -398,9 +398,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used for support photos and verification.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location is used for nearby booking and navigation.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Photo library is used for document upload and support attachments.";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.apnaservo.userios;
@@ -428,9 +426,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used for support photos and verification.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location is used for nearby booking and navigation.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Photo library is used for document upload and support attachments.";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.apnaservo.userios;

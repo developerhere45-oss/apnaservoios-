@@ -94,6 +94,12 @@ struct LoginDetailsSheet: View {
                 store.completeLogin(name: name, value: value)
             }
             .roseCTA()
+            .disabled(store.isAuthenticating)
+            .overlay {
+                if store.isAuthenticating {
+                    ProgressView().tint(.white)
+                }
+            }
         }
         .padding(20)
         .background(AppTheme.bg)
@@ -261,6 +267,11 @@ struct EditProfileSheet: View {
 }
 
 struct LegalInformationSheet: View {
+    @EnvironmentObject private var store: UserAppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var showDeletionConfirmation = false
+    @State private var deletionReason = ""
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -278,12 +289,35 @@ struct LegalInformationSheet: View {
                     .foregroundStyle(AppTheme.muted)
                 Text("Delete Account")
                     .font(.system(size: 17, weight: .bold))
-                Text("Account deletion UI is represented here. Backend wiring is intentionally not added in this frontend-only migration.")
+                Text("You can request permanent deletion of your account and associated personal data. You will be signed out after submission, and support will contact you if verification is required.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
+                TextField("Reason (optional)", text: $deletionReason, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                Button("Request Account Deletion", role: .destructive) {
+                    showDeletionConfirmation = true
+                }
+                .disabled(store.isDeletingAccount)
+                .outlineCTA()
             }
             .padding(20)
         }
         .background(AppTheme.bg)
+        .confirmationDialog(
+            "Permanently delete your account?",
+            isPresented: $showDeletionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Submit Deletion Request", role: .destructive) {
+                Task {
+                    if await store.requestAccountDeletion(reason: deletionReason) {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone after the deletion request is completed.")
+        }
     }
 }

@@ -25,7 +25,9 @@ final class UserFirebaseAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("APNs registration failed: \(error.localizedDescription)")
+        #if DEBUG
+        NSLog("APNs registration failed: %@", error.localizedDescription)
+        #endif
     }
 }
 

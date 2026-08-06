@@ -20,7 +20,7 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingToken:
-            return "Firebase ID token missing. Add Firebase iOS Auth or paste a temporary token in Profile."
+            return "Your session is unavailable. Please sign in again."
         case .invalidURL:
             return "Backend URL invalid."
         case .badResponse(let message):
@@ -33,8 +33,6 @@ final class APIClient {
     private var activeBaseURL: URL
     private let baseURLs: [URL]
     private let session: URLSession
-    private let secureStore = SecureStore()
-    private let localDeviceToken = "local-device-auth"
 
     init(baseURLs: [URL] = [AppConfig.apiBaseURL], session: URLSession = .shared) {
         self.baseURLs = baseURLs
@@ -240,7 +238,8 @@ final class APIClient {
         token: String,
         body: [String: Any]? = nil
     ) async throws -> T {
-        let resolvedToken = normalizedToken(token)
+        let resolvedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !resolvedToken.isEmpty else { throw APIError.missingToken }
 
         var lastError: Error?
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
@@ -269,11 +268,6 @@ final class APIClient {
         request.timeoutInterval = 14
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if usesLocalDeviceAuth(token) {
-            request.setValue(localDevUid(), forHTTPHeaderField: "X-ApnaServo-Dev-Uid")
-            request.setValue("user", forHTTPHeaderField: "X-ApnaServo-Dev-Role")
-        }
-
         if let body {
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
@@ -287,32 +281,12 @@ final class APIClient {
             throw APIError.badResponse(httpError(code: http.statusCode, data: data))
         }
         if data.isEmpty {
-            if T.self == EmptyResponse.self {
-                return EmptyResponse() as! T
+            if let empty = EmptyResponse() as? T {
+                return empty
             }
             throw APIError.badResponse("Backend returned empty response.")
         }
         return try JSONDecoder().decode(T.self, from: data)
-    }
-
-    private func normalizedToken(_ token: String) -> String {
-        let clean = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        return clean.isEmpty ? localDeviceToken : clean
-    }
-
-    private func usesLocalDeviceAuth(_ token: String) -> Bool {
-        token == localDeviceToken || token == "local-development"
-    }
-
-    private func localDevUid() -> String {
-        let key = "ios_user_dev_uid"
-        let saved = secureStore.string(for: key)
-        if !saved.isEmpty {
-            return saved
-        }
-        let generated = "local-ios-user-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
-        secureStore.set(generated, for: key)
-        return generated
     }
 
     private func makeURL(baseURL: URL, path: String) throws -> URL {
@@ -376,7 +350,8 @@ final class SecureStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         SecItemAdd(addQuery as CFDictionary, nil)
     }
