@@ -84,6 +84,12 @@ final class APIClient {
         let _: EmptyResponse? = try? await request(path: path, method: "PATCH", token: token, body: [:])
     }
 
+    func markAllNotificationsRead(_ notificationIds: [String], token: String) async {
+        for notificationId in notificationIds {
+            await markNotificationRead(notificationId, token: token)
+        }
+    }
+
     func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fcmToken: String, token: String) async throws -> Booking {
         let amount = service.price
         let body: [String: Any] = [

@@ -81,6 +81,7 @@ final class UserAppStore: ObservableObject {
         "Suit / Kurta", "Jacket", "Shoes", "Others"
     ]
     private let api = APIClient()
+    private lazy var locationService = LocationService()
     private let secureStore = SecureStore()
     private let defaults = UserDefaults.standard
     private let notificationService = AppNotificationService.shared
@@ -88,6 +89,7 @@ final class UserAppStore: ObservableObject {
     private var fcmTokenObserver: NSObjectProtocol?
     private var notificationOpenObserver: NSObjectProtocol?
     private var pendingNotificationDeepLink: AppNotificationDeepLink?
+    private let tokenKey = "user_api_token"
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
 
     init() {
@@ -485,7 +487,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func requestCancellation(_ booking: Booking) {
-        guard ["pending", "accepted", "on_the_way", "arrived"].contains(booking.progressStatus) else {
+        guard ["pending", "accepted", "on_the_way", "arrived"].contains(booking.status) else {
             toastMessage = "Booking cannot be cancelled after work starts."
             return
         }
@@ -495,7 +497,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func requestCounterOffer(_ booking: Booking) {
-        guard booking.progressStatus == "amount_pending", booking.quoteStatus == "pending" else {
+        guard booking.status == "amount_pending", booking.quoteStatus == "pending" else {
             toastMessage = "A counter offer is not available for this booking."
             return
         }
@@ -519,12 +521,12 @@ final class UserAppStore: ObservableObject {
                     booking.id,
                     amount: amount,
                     message: counterOfferMessage.trimmingCharacters(in: .whitespacesAndNewlines),
-                    token: authToken
+                    token: apiToken
                 )
                 latestBooking = updated
                 upsertBooking(updated)
                 toastMessage = "Counter offer sent to the partner."
-                await refreshLiveBookings()
+                await refreshBookings()
             } catch {
                 toastMessage = error.localizedDescription
             }
@@ -532,7 +534,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func requestReview(_ booking: Booking) {
-        guard booking.progressStatus == "completed" else {
+        guard booking.status == "completed" else {
             toastMessage = "Only completed bookings can be reviewed."
             return
         }
@@ -556,7 +558,7 @@ final class UserAppStore: ObservableObject {
                     bookingId: booking.id,
                     rating: rating,
                     comment: reviewComment.trimmingCharacters(in: .whitespacesAndNewlines),
-                    token: authToken
+                    token: apiToken
                 )
                 reviewedBookingIDs.insert(booking.id)
                 toastMessage = "Thank you for your review."
@@ -706,7 +708,7 @@ final class UserAppStore: ObservableObject {
             return copy
         }
         Task {
-            await api.markAllNotificationsRead(unreadIds, token: authToken)
+            await api.markAllNotificationsRead(unreadIds, token: apiToken)
         }
     }
 
@@ -815,7 +817,7 @@ final class UserAppStore: ObservableObject {
     }
 
     private var apiToken: String {
-        let saved = secureStore.string(for: "user_api_token")
+        let saved = secureStore.string(for: tokenKey)
         return saved.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
