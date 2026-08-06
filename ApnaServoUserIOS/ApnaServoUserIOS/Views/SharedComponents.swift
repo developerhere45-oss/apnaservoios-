@@ -302,7 +302,7 @@ struct BottomNav: View {
 
     private func nav(_ title: String, _ image: String, _ target: UserScreen) -> some View {
         let selected = activeTarget == target
-        Button {
+        return Button {
             store.selectTab(target)
         } label: {
             VStack(spacing: 3) {
