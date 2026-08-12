@@ -2058,6 +2058,9 @@ struct BookingConfirmScreen: View {
                         summaryRow("Service", store.selectedService.name)
                         summaryRow("Issue", store.bookingRequestDetails().isEmpty ? "Service request" : store.bookingRequestDetails())
                         summaryRow("Address", store.bookingAddressPreview())
+                        summaryRow("Customer", store.profile.name)
+                        if !store.profile.phone.isEmpty { summaryRow("Contact", store.profile.phone) }
+                        if !store.profile.email.isEmpty { summaryRow("Email", store.profile.email) }
                         summaryRow("Service Tier", store.draft.tier.rawValue)
                         summaryRow("Booking Charge", "No upfront charge")
                     }

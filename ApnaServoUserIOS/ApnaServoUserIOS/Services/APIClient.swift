@@ -88,9 +88,10 @@ final class APIClient {
         }
     }
 
-    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, fcmToken: String, token: String) async throws -> Booking {
+    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, city: String, fcmToken: String, requestID: String, token: String) async throws -> Booking {
         let amount = service.price
         let body: [String: Any] = [
+            "bookingCode": requestID,
             "serviceCategory": service.id,
             "serviceName": service.name,
             "serviceTier": draft.tier.rawValue,
@@ -98,7 +99,7 @@ final class APIClient {
             "problem": draft.problem,
             "address": draft.address,
             "location": draft.address,
-            "city": AppConfig.defaultCity,
+            "city": city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppConfig.defaultCity : city,
             "lat": draft.lat,
             "lng": draft.lng,
             "defaultAmount": amount,
@@ -112,20 +113,10 @@ final class APIClient {
             "userFcmToken": fcmToken
         ]
         let envelope: BookingEnvelope = try await request(path: "/bookings", method: "POST", token: token, body: body)
-        return envelope.booking ?? Booking(
-            id: "local-\(UUID().uuidString)",
-            bookingCode: "",
-            serviceCategory: service.id,
-            serviceName: service.name,
-            issue: draft.problem,
-            address: draft.address,
-            slot: "",
-            customerName: profile.name,
-            userPhone: profile.phone,
-            defaultAmount: amount,
-            lat: draft.lat,
-            lng: draft.lng
-        )
+        guard let booking = envelope.booking else {
+            throw APIError.badResponse("Booking confirmation was missing. Please retry safely.")
+        }
+        return booking
     }
 
     func getBooking(_ bookingId: String, token: String) async throws -> Booking {

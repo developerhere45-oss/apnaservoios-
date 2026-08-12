@@ -73,6 +73,7 @@ final class UserAppStore: ObservableObject {
     @Published var submittedRatings: [String: Int] = [:]
     @Published var selectedCommercialServiceTitle = "Commercial AC Service"
     @Published var selectedCommercialServiceId = "ac"
+    private var bookingRequestID = ""
     @Published var selectedCleaningType = "Home Cleaning"
     @Published var selectedLaundryServiceType = "Wash & Fold"
     @Published var selectedLaundryItems: [String: Int] = [:]
@@ -394,6 +395,7 @@ final class UserAppStore: ObservableObject {
             navigate(.preparing)
             return
         }
+        bookingRequestID = "IOS-\(UUID().uuidString)"
         draft = BookingDraft(
             problem: "",
             address: addressMode == .current ? "Detecting your current service location..." : "",
@@ -501,10 +503,12 @@ final class UserAppStore: ObservableObject {
 
     func bookingRequestDetails() -> String {
         let instructions = draft.problem.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tier = "Tier: \(draft.tier.rawValue)"
         if selectedService.id == "cleaning" {
-            return instructions.isEmpty
+            let detail = instructions.isEmpty
                 ? selectedCleaningType
                 : "\(selectedCleaningType) | Instructions: \(instructions)"
+            return limitedBookingDetail("Type: \(detail) | \(tier)")
         }
         if selectedService.id == "laundry" {
             let items = laundryItems.compactMap { item -> String? in
@@ -512,64 +516,62 @@ final class UserAppStore: ObservableObject {
                 return "\(item) x\(quantity)"
             }.joined(separator: ", ")
             let base = "\(selectedLaundryServiceType) | Items: \(items)"
-            return instructions.isEmpty ? base : "\(base) | Instructions: \(instructions)"
+            let detail = instructions.isEmpty ? base : "\(base) | Instructions: \(instructions)"
+            return limitedBookingDetail("Type: \(detail) | \(tier)")
         }
-        return instructions
+        let detail = instructions.isEmpty ? "Customer requested \(selectedService.name)" : instructions
+        return limitedBookingDetail("Issue: \(detail) | \(tier)")
     }
 
     func confirmBooking() {
         guard !isBookingSubmitting else { return }
+        guard isLoggedIn, !apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            toastMessage = "Your session expired. Please sign in again before booking."
+            return
+        }
+        let address = bookingAddressPreview()
+        guard address.count >= 10 else {
+            toastMessage = "Add a complete service address before confirming."
+            return
+        }
         isBookingSubmitting = true
-        let issue = draft.problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Service request - \(selectedService.name)"
-            : "Service request - \(draft.problem)"
+        let issue = bookingRequestDetails()
         var networkDraft = draft
         networkDraft.problem = issue
-        networkDraft.address = bookingAddressPreview()
-        let booking = Booking(
-            id: "AS\(Int(Date().timeIntervalSince1970))",
-            bookingCode: "AS\(Int(Date().timeIntervalSince1970) % 100000)",
-            serviceCategory: selectedService.id,
-            serviceName: selectedService.name,
-            issue: issue,
-            address: networkDraft.address,
-            slot: "",
-            status: "pending",
-            partnerName: "",
-            partnerPhone: "",
-            customerName: profile.name.isEmpty ? "ApnaServo Customer" : profile.name,
-            userPhone: profile.phone,
-            defaultAmount: selectedService.price,
-            lat: networkDraft.lat,
-            lng: networkDraft.lng
-        )
-        latestBooking = booking
-        upsertBooking(booking)
-        addNotification(title: "Booking confirmed", body: "\(booking.serviceName) request \(booking.displayId) is confirmed.", type: "booking", bookingId: booking.id)
-        bookingChatMessages = [
-            ChatMessage(id: "system-chat", bookingId: booking.id, bookingCode: booking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat will be available after a partner is assigned.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
-        ]
-        navigate(.bookingConfirmed)
+        networkDraft.address = address
         let service = selectedService
         let customer = profile
+        let requestID = bookingRequestID.isEmpty ? "IOS-\(UUID().uuidString)" : bookingRequestID
+        bookingRequestID = requestID
         Task {
             do {
                 let liveBooking = try await api.createBooking(
                     service: service,
                     draft: networkDraft,
                     profile: customer,
+                    city: city,
                     fcmToken: notificationService.fcmToken,
+                    requestID: requestID,
                     token: apiToken
                 )
                 latestBooking = liveBooking
                 upsertBooking(liveBooking)
-                addNotification(title: "Booking sent", body: "\(liveBooking.displayId) is now live for nearby partners.", type: "booking", bookingId: liveBooking.id)
+                bookingChatMessages = [
+                    ChatMessage(id: "system-chat", bookingId: liveBooking.id, bookingCode: liveBooking.bookingCode, senderRole: "system", senderName: "ApnaServo", message: "Chat will be available after a partner is assigned.", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+                ]
+                addNotification(title: "Booking confirmed", body: "\(liveBooking.displayId) is now live for nearby partners.", type: "booking", bookingId: liveBooking.id)
+                bookingRequestID = ""
+                navigate(.bookingConfirmed)
                 startBookingPolling()
             } catch {
-                toastMessage = "Booking could not reach the live backend. Please retry from booking status."
+                toastMessage = "Booking was not confirmed. Check your connection and tap Confirm Booking again."
             }
             isBookingSubmitting = false
         }
+    }
+
+    private func limitedBookingDetail(_ value: String) -> String {
+        String(value.prefix(500))
     }
 
     func openTrack(_ booking: Booking? = nil) {
