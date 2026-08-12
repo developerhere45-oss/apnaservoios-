@@ -1,12 +1,27 @@
+# Xcode
 DerivedData/
 build/
 *.xcuserstate
+*.xcscmblueprint
 xcuserdata/
-.DS_Store
 *.moved-aside
 *.hmap
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# App signing and local Firebase config
+*.mobileprovision
+*.p8
+GoogleService-Info.plist
+!ApnaServoUserIOS/ApnaServoUserIOS/GoogleService-Info.plist
+
+# Local Codex and macOS artifacts
 .codex-git-push.log
 .codex-push-status.png
+.DS_Store
