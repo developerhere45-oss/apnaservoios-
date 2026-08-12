@@ -27,8 +27,6 @@ final class UserAppStore: ObservableObject {
     @Published var draft = BookingDraft(
         problem: "",
         address: "Detecting your current service location...",
-        date: "",
-        time: "",
         tier: .normal,
         lat: AppConfig.defaultLatitude,
         lng: AppConfig.defaultLongitude,
@@ -53,8 +51,6 @@ final class UserAppStore: ObservableObject {
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
     @Published var loginMode = "Phone"
-    @Published var showDateSheet = false
-    @Published var showTimeSheet = false
     @Published var showSettingsSheet = false
     @Published var showEditProfileSheet = false
     @Published var showLegalSheet = false
@@ -394,11 +390,13 @@ final class UserAppStore: ObservableObject {
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
         selectedService = service
+        if Self.preparingServiceIDs.contains(service.id) {
+            navigate(.preparing)
+            return
+        }
         draft = BookingDraft(
             problem: "",
             address: addressMode == .current ? "Detecting your current service location..." : "",
-            date: "",
-            time: "",
             tier: .normal,
             lat: profile.lat,
             lng: profile.lng,
@@ -460,23 +458,9 @@ final class UserAppStore: ObservableObject {
         draft.hasLocation = false
     }
 
-    func chooseDate(_ value: String) {
-        draft.date = value
-        showDateSheet = false
-    }
-
-    func chooseTime(_ value: String) {
-        draft.time = value
-        showTimeSheet = false
-    }
-
     func continueToConfirm() {
         if selectedService.id == "laundry" && selectedLaundryItems.isEmpty {
             toastMessage = "Please select at least one laundry item."
-            return
-        }
-        if draft.date.isEmpty || draft.time.isEmpty {
-            toastMessage = "Please select a date and time."
             return
         }
         if houseFlat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -549,7 +533,7 @@ final class UserAppStore: ObservableObject {
             serviceName: selectedService.name,
             issue: issue,
             address: networkDraft.address,
-            slot: networkDraft.slot,
+            slot: "",
             status: "pending",
             partnerName: "",
             partnerPhone: "",
@@ -927,8 +911,13 @@ final class UserAppStore: ObservableObject {
     func openCommercialService(_ title: String, serviceId: String) {
         selectedCommercialServiceTitle = title
         selectedCommercialServiceId = serviceId
-        navigate(.commercialFormOne)
+        selectedService = ServiceCatalog.service(id: serviceId)
+        navigate(.preparing)
     }
+
+    private static let preparingServiceIDs: Set<String> = [
+        "roadside", "painting", "interior", "ro", "pest"
+    ]
 
     func logout() {
         stopBookingPolling()

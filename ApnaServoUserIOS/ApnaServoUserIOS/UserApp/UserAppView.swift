@@ -60,6 +60,8 @@ struct UserAppView: View {
             AllServicesScreen()
         case .detail:
             ServiceDetailScreen()
+        case .preparing:
+            ServicePreparingScreen()
         case .booking:
             BookingDetailsScreen()
         case .confirm:
@@ -809,7 +811,7 @@ private struct HomeHeroSlideView: View {
                         .minimumScaleFactor(0.72)
 
                 Button(action: bookAction) {
-                    Text("Book Slot ›")
+                    Text("Book Now ›")
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(.white)
                         .frame(width: 112, height: 34)
@@ -818,7 +820,8 @@ private struct HomeHeroSlideView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(maxWidth: 250, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 110)
             .padding(.horizontal, 14)
             .padding(.bottom, 23)
         }
@@ -1388,7 +1391,7 @@ struct ServiceDetailScreen: View {
                 .padding(18)
                 .padding(.bottom, 112)
             }
-            Button("Book Slot") {
+            Button("Book Now") {
                 store.startBooking(store.selectedService)
             }
             .darkCTA()
@@ -1520,6 +1523,76 @@ struct GuaranteeStrip: View {
     }
 }
 
+struct ServicePreparingScreen: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                Button { store.back() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 54, height: 54)
+                        .background(AppTheme.bookingSoft, in: Circle())
+                }
+                .accessibilityLabel("Back")
+
+                Spacer()
+                VStack(spacing: 0) {
+                    AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                        .frame(width: 190, height: 54)
+                    Text("Home Services At Your Doorstep")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppTheme.ink)
+                }
+                Spacer()
+
+                Button { store.navigate(.support) } label: {
+                    Image(systemName: "headphones")
+                        .font(.system(size: 27, weight: .medium))
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 54, height: 54)
+                }
+                .accessibilityLabel("Support")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+            Spacer(minLength: 28)
+
+            AndroidAssetImage(name: "service_preparing_barrier", contentMode: .fit)
+                .frame(maxWidth: 430)
+                .frame(height: 390)
+                .padding(.horizontal, 28)
+                .accessibilityHidden(true)
+
+            HStack(spacing: 20) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 31, weight: .medium))
+                    .foregroundStyle(AppTheme.booking)
+                Rectangle()
+                    .fill(AppTheme.booking.opacity(0.22))
+                    .frame(width: 1, height: 52)
+                Text("We're Preparing This Service")
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundStyle(AppTheme.booking)
+                    .minimumScaleFactor(0.72)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 26)
+            .frame(maxWidth: 650, minHeight: 104)
+            .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 25).stroke(AppTheme.booking.opacity(0.08), lineWidth: 1))
+            .padding(.horizontal, 26)
+
+            Spacer(minLength: 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.bg.ignoresSafeArea())
+    }
+}
+
 struct BookingDetailsScreen: View {
     @EnvironmentObject private var store: UserAppStore
 
@@ -1536,7 +1609,6 @@ struct BookingDetailsScreen: View {
                         LaundryBookingOptionsCard()
                     }
                     ProblemDetailsCard()
-                    DateTimeCard()
                     AddressSelectionCard()
                     Button("Confirm Booking") {
                         store.continueToConfirm()
@@ -1803,58 +1875,6 @@ struct ProblemDetailsCard: View {
     }
 }
 
-struct DateTimeCard: View {
-    @EnvironmentObject private var store: UserAppStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                AndroidAssetImage(name: "booking_icon_date_time", contentMode: .fit)
-                    .frame(width: 38, height: 38)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Date & Time")
-                        .font(.system(size: 17, weight: .black))
-                    Text("Choose a convenient slot")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.muted)
-                }
-            }
-            HStack(spacing: 10) {
-                selector(title: store.draft.date.isEmpty ? "Select date" : store.draft.date, image: "booking_icon_date") {
-                    store.showDateSheet = true
-                }
-                selector(title: store.draft.time.isEmpty ? "Select time" : store.draft.time, image: "booking_icon_time") {
-                    store.showTimeSheet = true
-                }
-            }
-            Text("Partners accept slots based on nearby availability. No upfront payment is collected.")
-                .font(.system(size: 12))
-                .foregroundStyle(AppTheme.muted)
-        }
-        .androidCard(padding: 16, radius: 20)
-    }
-
-    private func selector(title: String, image: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                AndroidAssetImage(name: image, contentMode: .fit)
-                    .frame(width: 34, height: 34)
-                Text(title)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(minHeight: 34)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 15))
-            .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct AddressSelectionCard: View {
     @EnvironmentObject private var store: UserAppStore
 
@@ -2037,7 +2057,6 @@ struct BookingConfirmScreen: View {
                     VStack(alignment: .leading, spacing: 12) {
                         summaryRow("Service", store.selectedService.name)
                         summaryRow("Issue", store.bookingRequestDetails().isEmpty ? "Service request" : store.bookingRequestDetails())
-                        summaryRow("Date & Time", "\(store.draft.date), \(store.draft.time)")
                         summaryRow("Address", store.bookingAddressPreview())
                         summaryRow("Service Tier", store.draft.tier.rawValue)
                         summaryRow("Booking Charge", "No upfront charge")
@@ -2058,16 +2077,10 @@ struct BookingConfirmScreen: View {
                     }
                     .androidCard(padding: 16, radius: 20, border: AppTheme.bookingSoft)
 
-                    HStack(spacing: 10) {
-                        Button("Edit Date") {
-                            store.showDateSheet = true
-                        }
-                        .outlineCTA()
-                        Button("Edit Address") {
-                            store.navigate(.booking)
-                        }
-                        .outlineCTA()
+                    Button("Edit Address") {
+                        store.navigate(.booking)
                     }
+                    .outlineCTA()
 
                     Button(store.isBookingSubmitting ? "Confirming..." : "Confirm Booking") {
                         store.confirmBooking()
@@ -2574,8 +2587,6 @@ private struct BookingDetailsPanel: View {
             Divider()
             FlowDetailRow(icon: "wrench.and.screwdriver", title: "Service", value: booking.serviceName)
             Divider().padding(.leading, 48)
-            FlowDetailRow(icon: "calendar", title: "Date & Time", value: booking.slot)
-            Divider().padding(.leading, 48)
             FlowDetailRow(icon: "mappin", title: "Service Address", value: booking.address)
             if showsAmount {
                 Divider().padding(.leading, 48)
@@ -2972,7 +2983,7 @@ struct BookingHistoryCard: View {
                     Text(booking.displayId)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(AppTheme.muted)
-                    Text(booking.slot)
+                    Text(booking.address)
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
                         .lineLimit(1)

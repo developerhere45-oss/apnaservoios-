@@ -7,6 +7,7 @@ enum UserScreen: String, CaseIterable {
     case home
     case services
     case detail
+    case preparing
     case booking
     case confirm
     case bookingConfirmed
@@ -182,14 +183,11 @@ struct UserProfile: Codable, Hashable {
 struct BookingDraft: Hashable {
     var problem = ""
     var address = ""
-    var date = "Today"
-    var time = "06:00 PM - 08:00 PM"
     var tier: ServiceTier = .normal
     var lat = AppConfig.defaultLatitude
     var lng = AppConfig.defaultLongitude
     var hasLocation = false
 
-    var slot: String { "\(date), \(time)" }
 }
 
 struct Booking: Identifiable, Codable, Hashable {

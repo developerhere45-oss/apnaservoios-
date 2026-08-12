@@ -242,7 +242,7 @@ struct BookingStepper: View {
             }
             HStack {
                 stepLabel("Service", active: current >= 1)
-                stepLabel("Date & Address", active: current >= 2)
+                stepLabel("Service Address", active: current >= 2)
                 stepLabel("Confirm", active: current >= 3)
             }
         }
@@ -321,7 +321,7 @@ struct BottomNav: View {
 
     private var activeTarget: UserScreen {
         switch store.screen {
-        case .home, .services, .detail, .commercial:
+        case .home, .services, .detail, .preparing, .commercial:
             return .home
         case .bookings, .track, .bookingChat:
             return .bookings
