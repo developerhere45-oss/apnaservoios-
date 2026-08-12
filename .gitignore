@@ -1,0 +1,12 @@
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.codex-git-push.log
+.codex-push-status.png
