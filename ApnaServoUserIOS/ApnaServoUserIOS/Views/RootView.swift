@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @EnvironmentObject private var store: UserAppStore
@@ -11,8 +12,8 @@ struct RootView: View {
         }
         .task {
             store.configureAppServices()
-            await store.refreshBookings()
             guard store.screen == .splash else { return }
+            if await store.restoreAuthenticatedSession() { return }
             try? await Task.sleep(nanoseconds: 900_000_000)
             store.finishSplash()
         }
@@ -105,8 +106,16 @@ struct ProfileSettingsSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Settings")
                 .font(.system(size: 22, weight: .bold))
-            Toggle("Service completion reminders", isOn: $store.paymentInfoExpanded)
-            Toggle("About ApnaServo tips", isOn: $store.aboutInfoExpanded)
+            Button {
+                Task { await store.enableBookingNotifications() }
+            } label: {
+                Label("Enable Booking Notifications", systemImage: "bell.badge")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            Text("Notifications are requested only when you choose to enable booking updates.")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.muted)
             Divider()
             Button("Close") { store.showSettingsSheet = false }
                 .outlineCTA()
@@ -132,7 +141,7 @@ struct EditProfileSheet: View {
             TextField("Email", text: $store.profile.email)
                 .keyboardType(.emailAddress)
                 .textFieldStyle(.roundedBorder)
-            Button("Save") { store.showEditProfileSheet = false }
+            Button("Save") { Task { await store.saveProfileChanges() } }
                 .roseCTA()
             Spacer()
         }
@@ -157,6 +166,10 @@ struct LegalInformationSheet: View {
                 Text("ApnaServo keeps profile, address, booking and support details only for service fulfilment and live service updates.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
+                Button("Open Full Privacy Policy") {
+                    UIApplication.shared.open(AppConfig.privacyPolicyURL)
+                }
+                .outlineCTA()
                 Text("Terms")
                     .font(.system(size: 17, weight: .bold))
                 Text("Final amount is confirmed after inspection. No upfront payment is collected before service completion.")
@@ -164,12 +177,12 @@ struct LegalInformationSheet: View {
                     .foregroundStyle(AppTheme.muted)
                 Text("Delete Account")
                     .font(.system(size: 17, weight: .bold))
-                Text("You can request permanent deletion of your account and associated personal data. You will be signed out after submission, and support will contact you if verification is required.")
+                Text("Permanently deletes your account, profile, saved addresses, device tokens, support conversations and other personal data. Booking records that must be retained are de-identified. You will be signed out immediately.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
                 TextField("Reason (optional)", text: $deletionReason, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                Button("Request Account Deletion", role: .destructive) {
+                Button("Delete Account", role: .destructive) {
                     showDeletionConfirmation = true
                 }
                 .disabled(store.isDeletingAccount)
@@ -183,7 +196,7 @@ struct LegalInformationSheet: View {
             isPresented: $showDeletionConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Submit Deletion Request", role: .destructive) {
+            Button("Delete Account", role: .destructive) {
                 Task {
                     if await store.requestAccountDeletion(reason: deletionReason) {
                         dismiss()
@@ -192,7 +205,7 @@ struct LegalInformationSheet: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This action cannot be undone after the deletion request is completed.")
+            Text("This permanently deletes your account and cannot be undone.")
         }
     }
 }

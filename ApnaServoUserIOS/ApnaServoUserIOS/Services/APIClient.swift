@@ -35,13 +35,30 @@ final class APIClient {
     private let session: URLSession
 
     init(baseURLs: [URL] = [AppConfig.apiBaseURL], session: URLSession = .shared) {
-        self.baseURLs = baseURLs
-        self.activeBaseURL = baseURLs[0]
+        let resolvedBaseURLs = baseURLs.isEmpty ? [AppConfig.apiBaseURL] : baseURLs
+        self.baseURLs = resolvedBaseURLs
+        self.activeBaseURL = resolvedBaseURLs[0]
         self.session = session
     }
 
     var socketURL: URL {
         AppConfig.socketURL
+    }
+
+    func sendLoginOTP(phone: String) async throws -> OTPSendResponse {
+        try await publicRequest(
+            path: "/otp/send",
+            method: "POST",
+            body: ["phone": phone, "role": "user"]
+        )
+    }
+
+    func verifyLoginOTP(phone: String, requestId: String, otp: String) async throws -> OTPVerifyResponse {
+        try await publicRequest(
+            path: "/otp/verify",
+            method: "POST",
+            body: ["phone": phone, "requestId": requestId, "otp": otp, "role": "user"]
+        )
     }
 
     func upsertUserProfile(_ profile: UserProfile, fcmToken: String, token: String) async throws {
@@ -63,7 +80,29 @@ final class APIClient {
     }
 
     func requestAccountDeletion(reason: String, token: String) async throws {
-        let _: EmptyResponse = try await request(path: "/users/delete-account-request", method: "POST", token: token, body: ["reason": reason])
+        let _: EmptyResponse = try await request(path: "/users/account", method: "DELETE", token: token, body: ["reason": reason])
+    }
+
+    func fetchCurrentUser(token: String) async throws -> UserAccountRecord {
+        let envelope: UserAccountEnvelope = try await request(path: "/users/me", token: token)
+        guard let user = envelope.user else {
+            throw APIError.badResponse("Your account could not be restored. Please sign in again.")
+        }
+        return user
+    }
+
+    func sendSupportTicketMessage(ticketId: String, clientMessageId: String, message: String, token: String) async throws {
+        let body: [String: Any] = [
+            "ticketId": ticketId,
+            "clientMessageId": clientMessageId,
+            "senderRole": "user",
+            "senderName": "Customer",
+            "message": message,
+            "category": "customer_support",
+            "priority": "normal",
+            "source": "ios_user_app"
+        ]
+        let _: EmptyResponse = try await request(path: "/users/support-tickets/sync", method: "POST", token: token, body: body)
     }
 
     func fetchNotifications(token: String) async throws -> [AppNotificationItem] {
@@ -133,6 +172,19 @@ final class APIClient {
             method: "PATCH",
             token: token,
             body: ["status": status, "finalAmount": finalAmount]
+        )
+        if let booking = envelope.booking {
+            return booking
+        }
+        return try await getBooking(bookingId, token: token)
+    }
+
+    func cancelBooking(_ bookingId: String, token: String) async throws -> Booking {
+        let envelope: BookingEnvelope = try await request(
+            path: "/bookings/\(bookingId)/cancel",
+            method: "POST",
+            token: token,
+            body: [:]
         )
         if let booking = envelope.booking {
             return booking
@@ -243,6 +295,25 @@ final class APIClient {
         throw lastError ?? APIError.badResponse("Backend not reachable.")
     }
 
+    private func publicRequest<T: Decodable>(
+        path: String,
+        method: String,
+        body: [String: Any]? = nil
+    ) async throws -> T {
+        var lastError: Error?
+        let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
+        for baseURL in ordered {
+            do {
+                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: "", body: body)
+                activeBaseURL = baseURL
+                return value
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError ?? APIError.badResponse("Backend not reachable.")
+    }
+
     private func execute<T: Decodable>(
         baseURL: URL,
         path: String,
@@ -254,7 +325,9 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 14
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")

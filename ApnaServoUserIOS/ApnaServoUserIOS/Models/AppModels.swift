@@ -3,11 +3,14 @@ import Foundation
 enum UserScreen: String, CaseIterable {
     case splash
     case login
+    case otp
     case startupLocation
     case home
     case services
     case detail
     case preparing
+    case servicePreparing
+    case serviceLaunching
     case booking
     case confirm
     case bookingConfirmed
@@ -246,7 +249,7 @@ struct Booking: Identifiable, Codable, Hashable {
     }
 
     var canCustomerCancel: Bool {
-        ["pending", "accepted"].contains(status)
+        ["pending", "sent_to_partner", "accepted", "on_the_way", "arrived"].contains(status)
     }
 
     var isWaitingForPaymentVerification: Bool {
@@ -427,6 +430,31 @@ struct SendChatEnvelope: Decodable {
 }
 
 struct EmptyResponse: Decodable {}
+
+struct OTPSendResponse: Decodable {
+    let requestId: String
+    let expiresInSeconds: Int
+    let provider: String
+}
+
+struct OTPVerifyResponse: Decodable {
+    let phone: String
+    let role: String
+    let uid: String
+    let customToken: String
+}
+
+struct UserAccountEnvelope: Decodable {
+    let user: UserAccountRecord?
+}
+
+struct UserAccountRecord: Decodable {
+    let name: String?
+    let phone: String?
+    let email: String?
+    let address: String?
+    let accountStatus: String?
+}
 
 struct DynamicCodingKey: CodingKey {
     var stringValue: String

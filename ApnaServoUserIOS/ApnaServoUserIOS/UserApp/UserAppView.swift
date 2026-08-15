@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 struct UserAppView: View {
     @EnvironmentObject private var store: UserAppStore
@@ -12,7 +13,7 @@ struct UserAppView: View {
             if showsFloatingFooter, let booking = store.latestBooking {
                 FloatingBookingFooter(booking: booking)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, showsBottomNav ? 94 : 18)
+                    .padding(.bottom, showsBottomNav ? 8 : 18)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -52,6 +53,8 @@ struct UserAppView: View {
             SplashScreen()
         case .login:
             LoginScreen()
+        case .otp:
+            OTPVerificationScreen()
         case .startupLocation:
             StartupLocationGateScreen()
         case .home:
@@ -62,6 +65,10 @@ struct UserAppView: View {
             ServiceDetailScreen()
         case .preparing:
             ServicePreparingScreen()
+        case .servicePreparing:
+            ServicePreparingScreen()
+        case .serviceLaunching:
+            ServiceLaunchingScreen()
         case .booking:
             BookingDetailsScreen()
         case .confirm:
@@ -181,87 +188,86 @@ struct SplashScreen: View {
 
 struct LoginScreen: View {
     @EnvironmentObject private var store: UserAppStore
+    @FocusState private var focusedField: LoginField?
+
+    private enum LoginField { case name, phone }
 
     var body: some View {
         GeometryReader { proxy in
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ZStack(alignment: .topLeading) {
+                VStack(spacing: 14) {
+                    ZStack(alignment: .leading) {
                         AndroidAssetImage(name: "login_home_repair_hero", contentMode: .fill)
-                            .frame(width: proxy.size.width, height: min(292, proxy.size.height * 0.34))
+                            .frame(width: proxy.size.width, height: 330)
                             .clipped()
                         LinearGradient(
-                            colors: [AppTheme.loginBg.opacity(0.48), .clear, AppTheme.loginBg],
-                            startPoint: .top,
-                            endPoint: .bottom
+                            colors: [AppTheme.loginBg, AppTheme.loginBg.opacity(0.35), .clear, AppTheme.loginBg],
+                            startPoint: .leading,
+                            endPoint: .trailing
                         )
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 18) {
                             AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
-                                .frame(width: 174, height: 54)
-                            Text("Trusted Home Repair Services")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppTheme.muted)
+                                .frame(width: 190, height: 64)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Trusted\nHome")
+                                    .foregroundStyle(AppTheme.ink)
+                                Text("Services")
+                                    .foregroundStyle(AppTheme.loginRose)
+                            }
+                            .font(.system(size: 34, weight: .bold, design: .serif))
+                            Text("Just a tap away.")
+                                .font(.system(size: 16, weight: .bold))
                         }
-                        .padding(.leading, 28)
-                        .padding(.top, 46)
+                        .padding(.leading, 24)
                     }
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Trusted")
-                                .foregroundStyle(AppTheme.ink)
-                            Text("Home Repair")
-                                .foregroundStyle(AppTheme.loginRose)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                            Text("Services")
-                                .foregroundStyle(AppTheme.ink)
-                        }
-                        .font(.system(size: 44, weight: .regular, design: .serif))
-                        .lineSpacing(-2)
+                    trustStrip
 
-                        Text("Book verified experts for AC, plumber, electrician, laundry, roadside help and more.")
-                            .font(.system(size: 15))
+                    VStack(spacing: 12) {
+                        AndroidAssetImage(name: "login_namaste_portrait", contentMode: .fill)
+                            .frame(width: 82, height: 82)
+                            .clipShape(Circle())
+                        Text("✦  Namaste!  ✦")
+                            .font(.system(size: 30, weight: .bold, design: .serif).italic())
+                            .foregroundStyle(AppTheme.loginRose)
+                        Text("Sign in or continue to book trusted home services.")
+                            .font(.system(size: 14))
                             .foregroundStyle(AppTheme.muted)
-                            .lineSpacing(2)
 
-                        HStack(spacing: 0) {
-                            trustItem("Verified", "Experts", icon: "checkmark.shield.fill")
-                            trustDivider
-                            trustItem("On-Time", "Service", icon: "clock.fill")
-                            trustDivider
-                            trustItem("Quality", "Assured", icon: "medal.fill")
-                        }
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.62), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.line, lineWidth: 1))
+                        loginField(icon: "person.fill", placeholder: "Enter your full name", text: $store.loginName, field: .name)
+                        phoneField
 
-                        VStack(spacing: 10) {
-                            loginButton("Continue with Email", systemImage: "envelope.fill", primary: true) {
-                                store.beginLogin("Email")
+                        Button { store.showOTPLogin() } label: {
+                            HStack {
+                                Spacer()
+                                Text("Send OTP")
+                                Spacer()
+                                Image(systemName: "arrow.right")
                             }
-                            loginButton("Continue with Phone", systemImage: "phone.fill", primary: false) {
-                                store.beginLogin("Phone")
-                            }
-                        }
-
-                        Button {
-                            store.toastMessage = "Terms of Service and Privacy Policy are available from Profile > Legal."
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text("By continuing, you agree to our")
-                                    .foregroundStyle(AppTheme.muted)
-                                Text("Terms & Privacy Policy")
-                                    .foregroundStyle(AppTheme.loginRoseDark)
-                            }
-                            .font(.system(size: 11, weight: .medium))
-                            .frame(maxWidth: .infinity)
+                            .roseCTA()
                         }
                         .buttonStyle(.plain)
+
+                        HStack { Rectangle().frame(height: 1); Text("or"); Rectangle().frame(height: 1) }
+                            .foregroundStyle(AppTheme.line)
+
+                        Button { store.skipLoginToHome() } label: {
+                            Label("Skip to Home Screen", systemImage: "house")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.loginRose)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.loginRose.opacity(0.55)))
+                        }
+                        .buttonStyle(.plain)
+
+                        safeCard(title: "Your home is in safe hands.", subtitle: "Secure  •  Trusted  •  Professional")
                     }
-                    .padding(.horizontal, 26)
-                    .padding(.top, 2)
-                    .padding(.bottom, 22)
+                    .padding(18)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 16, y: 7)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 24)
                 }
                 .frame(width: proxy.size.width, alignment: .leading)
             }
@@ -270,52 +276,31 @@ struct LoginScreen: View {
         }
     }
 
-    private func loginButton(_ title: String, systemImage: String, primary: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(primary ? Color.white : AppTheme.loginRoseDark)
-                    .frame(width: 40, height: 40)
-                    .background(primary ? Color.white.opacity(0.15) : Color.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                Text(title)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
-            }
-            .foregroundStyle(primary ? Color.white : AppTheme.ink)
-            .font(.system(size: 16, weight: .bold))
-            .padding(.horizontal, 14)
-            .frame(height: 60)
-            .background {
-                if primary {
-                    LinearGradient(colors: [Color(hex: 0x7F001D), Color(hex: 0xD71943)], startPoint: .leading, endPoint: .trailing)
-                } else {
-                    Color.white
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 15).stroke(primary ? Color.clear : AppTheme.line, lineWidth: 1))
-            .shadow(color: primary ? AppTheme.loginRose.opacity(0.2) : Color.black.opacity(0.08), radius: 7, y: 4)
+    private var trustStrip: some View {
+        HStack(spacing: 0) {
+            trustItem("Verified", "Professionals", icon: "checkmark.shield.fill")
+            trustDivider
+            trustItem("No Upfront", "Payment", icon: "creditcard.fill")
+            trustDivider
+            trustItem("Quick & Reliable", "Support", icon: "headphones")
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 14)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 5)
+        .padding(.horizontal, 18)
     }
 
     private func trustItem(_ title: String, _ subtitle: String, icon: String) -> some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(AppTheme.loginRoseDark)
-                .frame(width: 38, height: 38)
-                .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                Text(subtitle)
-            }
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(AppTheme.ink)
+                .foregroundStyle(AppTheme.loginRose)
+                .frame(width: 40, height: 40)
+                .background(AppTheme.bookingSoft, in: Circle())
+            Text(title).font(.system(size: 11, weight: .bold))
+            Text(subtitle).font(.system(size: 10)).foregroundStyle(AppTheme.muted)
         }
         .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
     }
 
     private var trustDivider: some View {
@@ -323,6 +308,184 @@ struct LoginScreen: View {
             .fill(AppTheme.line)
             .frame(width: 1, height: 42)
     }
+
+    private func loginField(icon: String, placeholder: String, text: Binding<String>, field: LoginField) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).frame(width: 26)
+            TextField(placeholder, text: text)
+                .textContentType(.name)
+                .focused($focusedField, equals: field)
+                .submitLabel(.next)
+                .onSubmit { focusedField = .phone }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 54)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.loginRose.opacity(0.4)))
+    }
+
+    private var phoneField: some View {
+        HStack(spacing: 12) {
+            Text("+91").fontWeight(.bold)
+            Divider()
+            Image(systemName: "iphone").foregroundStyle(AppTheme.loginRose)
+            TextField("Enter your mobile number", text: $store.loginPhone)
+                .keyboardType(.numberPad)
+                .textContentType(.telephoneNumber)
+                .focused($focusedField, equals: .phone)
+                .onChange(of: store.loginPhone) { value in
+                    store.loginPhone = String(value.filter(\.isNumber).prefix(10))
+                }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 54)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.loginRose.opacity(0.4)))
+    }
+}
+
+struct OTPVerificationScreen: View {
+    @EnvironmentObject private var store: UserAppStore
+    @State private var otp = ""
+    @State private var secondsRemaining = 0
+    @FocusState private var otpFocused: Bool
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 22) {
+                HStack {
+                    Button { store.back() } label: { Image(systemName: "chevron.left") }
+                    Spacer()
+                    Label("Secure", systemImage: "checkmark.shield")
+                }
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(AppTheme.loginRose)
+
+                VStack(spacing: 10) {
+                    (Text("Verify Your ").foregroundColor(AppTheme.ink) + Text("Mobile Number").foregroundColor(AppTheme.loginRose))
+                        .font(.system(size: 27, weight: .bold))
+                    Text("We’ve sent a 6-digit OTP to")
+                        .foregroundStyle(AppTheme.muted)
+                    HStack(spacing: 14) {
+                        Image(systemName: "phone.fill").foregroundStyle(AppTheme.loginRose)
+                        Text("+91 \(store.loginPhone)").font(.system(size: 21, weight: .bold, design: .monospaced))
+                        Button("Edit") { store.back() }.foregroundStyle(AppTheme.loginRose)
+                    }
+                }
+
+                AndroidAssetImage(name: "otp_phone_illustration", contentMode: .fit)
+                    .frame(width: 190, height: 190)
+
+                otpBoxes
+                    .contentShape(Rectangle())
+                    .onTapGesture { otpFocused = true }
+                    .overlay(alignment: .topLeading) {
+                        TextField("", text: $otp)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                            .focused($otpFocused)
+                            .opacity(0.01)
+                            .frame(width: 1, height: 1)
+                            .onChange(of: otp) { value in otp = String(value.filter(\.isNumber).prefix(6)) }
+                    }
+
+                Label("Enter the 6-digit code sent to your number", systemImage: "checkmark.shield")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+
+                HStack(spacing: 14) {
+                    Image(systemName: "arrow.clockwise.circle")
+                        .font(.system(size: 32)).foregroundStyle(AppTheme.loginRose)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Didn’t receive the code?").fontWeight(.bold)
+                        Text("We can resend a new OTP").foregroundStyle(AppTheme.muted)
+                    }
+                    Spacer()
+                    Button("Resend OTP") {
+                        Task { await resendOTP() }
+                    }
+                        .disabled(secondsRemaining > 0)
+                        .foregroundStyle(secondsRemaining > 0 ? AppTheme.muted : AppTheme.loginRose)
+                }
+                .padding(16)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.line))
+
+                Text(secondsRemaining > 0 ? "Resend OTP in  00:\(String(format: "%02d", secondsRemaining))" : "You can resend the OTP now")
+                    .foregroundStyle(AppTheme.muted)
+
+                Button {
+                    Task { await verifyOTP() }
+                } label: {
+                    HStack {
+                        Image(systemName: "checkmark.shield")
+                        Spacer()
+                        Text("Verify & Continue")
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                    }
+                    .roseCTA()
+                }
+                .buttonStyle(.plain)
+                .disabled(otp.count != 6 || store.isAuthenticating)
+                .opacity(otp.count == 6 && !store.isAuthenticating ? 1 : 0.65)
+
+                safeCard(title: "Your data is 100% secure with us.", subtitle: "We never share your details with anyone.")
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
+        }
+        .background(AppTheme.loginBg.ignoresSafeArea())
+        .onAppear {
+            secondsRemaining = store.loginOTPExpiresInSeconds
+            otpFocused = true
+        }
+        .onReceive(timer) { _ in if secondsRemaining > 0 { secondsRemaining -= 1 } }
+    }
+
+    private var otpBoxes: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<6, id: \.self) { index in
+                Text(index < otp.count ? String(Array(otp)[index]) : "–")
+                    .font(.system(size: 25, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(index < otp.count ? AppTheme.loginRose : AppTheme.muted)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 68)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(index == otp.count ? AppTheme.loginRose : AppTheme.loginRose.opacity(0.25), lineWidth: 1.5))
+            }
+        }
+    }
+
+    private func resendOTP() async {
+        guard await store.resendLoginOTP() else { return }
+        otp = ""
+        secondsRemaining = store.loginOTPExpiresInSeconds
+        otpFocused = true
+        store.toastMessage = "A new OTP has been sent."
+    }
+
+    private func verifyOTP() async {
+        guard otp.count == 6 else { return }
+        _ = await store.verifyLoginOTP(otp)
+    }
+}
+
+private func safeCard(title: String, subtitle: String) -> some View {
+    HStack(spacing: 14) {
+        Image(systemName: "checkmark.shield.fill")
+            .font(.system(size: 28))
+            .foregroundStyle(AppTheme.loginRose)
+            .frame(width: 52, height: 52)
+            .background(Color.white.opacity(0.8), in: Circle())
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.loginRose)
+            Text(subtitle).font(.system(size: 12)).foregroundStyle(AppTheme.muted)
+        }
+        Spacer()
+        Image(systemName: "house.fill").font(.system(size: 34)).foregroundStyle(AppTheme.loginRose.opacity(0.7))
+    }
+    .padding(14)
+    .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 16))
 }
 
 struct StartupLocationGateScreen: View {
@@ -1372,6 +1535,196 @@ struct ServiceListCard: View {
             .androidCard(padding: 10, radius: 18, shadow: 2)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ServicePreparingScreen: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            unavailableHeader(showSupport: true)
+            Spacer(minLength: 38)
+            AndroidAssetImage(name: "service_preparing_barricade", contentMode: .fit)
+                .frame(width: 300, height: 300)
+            Spacer().frame(height: 42)
+            HStack(spacing: 16) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 34, weight: .regular))
+                    .foregroundStyle(AppTheme.loginRose)
+                    .frame(width: 70, height: 70)
+                    .background(AppTheme.bookingSoft, in: Circle())
+                Rectangle().fill(AppTheme.line).frame(width: 1, height: 58)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("We’re Preparing This Service")
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(AppTheme.loginRose)
+                    Text("Please wait while we set things up for you.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(18)
+            .background(Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.loginRose.opacity(0.14)))
+            .shadow(color: AppTheme.loginRose.opacity(0.08), radius: 14, y: 7)
+            .padding(.horizontal, 28)
+            Spacer(minLength: 80)
+        }
+        .background(AppTheme.loginBg.ignoresSafeArea())
+    }
+
+    private func unavailableHeader(showSupport: Bool) -> some View {
+        HStack(spacing: 14) {
+            Button { store.back() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(AppTheme.booking)
+                    .frame(width: 50, height: 50)
+                    .background(AppTheme.bookingSoft, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            VStack(spacing: 0) {
+                AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                    .frame(width: 205, height: 64)
+                Text("Home Services At Your Doorstep")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.muted)
+                Text("—  ✦  —")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.booking)
+            }
+            Spacer()
+            Button { store.navigate(.support) } label: {
+                Image(systemName: "headphones")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(AppTheme.ink)
+                    .frame(width: 50, height: 50)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+struct ServiceLaunchingScreen: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Button { store.back() } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(AppTheme.ink)
+                        }
+                        Spacer()
+                        Label("Secure", systemImage: "checkmark.shield")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppTheme.loginRoseDark)
+                    }
+
+                    AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                        .frame(width: 230, height: 94)
+                        .padding(.top, 16)
+
+                    launchTitle
+                        .padding(.top, 42)
+
+                    Text("Service booking is temporarily unavailable.\nGet ready for a smoother, faster & smarter\nservice experience with ApnaServo!")
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(5)
+                        .foregroundStyle(AppTheme.ink)
+                        .padding(.top, 45)
+
+                    Text("✦  What you will get  ✦")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .padding(.top, 38)
+
+                    HStack(spacing: 4) {
+                        launchBenefit("checkmark.seal", "Verified")
+                        launchBenefit("calendar", "Fast Booking")
+                        launchBenefit("checkmark.shield", "Secure")
+                        launchBenefit("headphones", "Support")
+                    }
+                    .padding(.top, 18)
+
+                    Button { store.selectTab(.home) } label: {
+                        Label("Back to Home", systemImage: "house")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
+                            .background(AppTheme.loginRose, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 40)
+
+                    Text("♥  Thank you for your patience and support!")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.muted)
+                        .padding(.top, 24)
+                        .padding(.bottom, 26)
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 14)
+                .frame(width: proxy.size.width)
+                .frame(minHeight: proxy.size.height)
+            }
+        }
+        .background(AppTheme.loginBg.ignoresSafeArea())
+    }
+
+    private var launchTitle: some View {
+        VStack(spacing: -9) {
+            HStack(alignment: .bottom, spacing: 5) {
+                Text("We’re almost ready")
+                    .font(.system(size: 12, weight: .semibold))
+                    .rotationEffect(.degrees(-16))
+                Text("✦").foregroundStyle(AppTheme.loginRose)
+            }
+            .offset(x: -86)
+            Text("Launching on")
+                .font(.custom("Georgia", size: 43).weight(.bold))
+                .foregroundStyle(AppTheme.ink)
+            Text("20th")
+                .font(.custom("Georgia", size: 68).weight(.bold))
+                .foregroundStyle(AppTheme.loginRose)
+            HStack(spacing: 10) {
+                Text("✦")
+                Text("August")
+                    .font(.custom("Georgia", size: 52).weight(.bold))
+                Image(systemName: "airplane")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(AppTheme.loginRoseDark)
+                    .rotationEffect(.degrees(-42))
+            }
+            .foregroundStyle(AppTheme.ink)
+        }
+    }
+
+    private func launchBenefit(_ icon: String, _ title: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 25, weight: .medium))
+                .foregroundStyle(AppTheme.loginRoseDark)
+                .frame(height: 34)
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -51,6 +51,12 @@ final class UserAppStore: ObservableObject {
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
     @Published var loginMode = "Phone"
+    @Published var loginName = ""
+    @Published var loginPhone = ""
+    @Published var loginOTPRequestID = ""
+    @Published var loginOTPExpiresInSeconds = 300
+    @Published var showDateSheet = false
+    @Published var showTimeSheet = false
     @Published var showSettingsSheet = false
     @Published var showEditProfileSheet = false
     @Published var showLegalSheet = false
@@ -100,6 +106,7 @@ final class UserAppStore: ObservableObject {
     private var pendingNotificationDeepLink: AppNotificationDeepLink?
     private let tokenKey = "user_api_token"
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
+    private let supportTicketKey = "apnaservo_user_support_ticket_id"
 
     init() {
         if let data = defaults.data(forKey: submittedRatingsKey),
@@ -152,6 +159,42 @@ final class UserAppStore: ObservableObject {
         screen = .login
     }
 
+    func restoreAuthenticatedSession() async -> Bool {
+        #if canImport(FirebaseAuth)
+        guard let firebaseUser = Auth.auth().currentUser else {
+            secureStore.set("", for: tokenKey)
+            return false
+        }
+        do {
+            let token = try await firebaseUser.getIDToken(forcingRefresh: true)
+            let account = try await api.fetchCurrentUser(token: token)
+            guard account.accountStatus != "deleted", account.accountStatus != "blocked" else {
+                logout()
+                return false
+            }
+            secureStore.set(token, for: tokenKey)
+            authToken = token
+            profile.name = account.name ?? ""
+            profile.phone = String((account.phone ?? "").filter(\.isNumber).suffix(10))
+            profile.email = account.email ?? ""
+            profile.address = account.address ?? ""
+            guard profile.isValid else {
+                logout()
+                return false
+            }
+            previousScreens.removeAll()
+            screen = .home
+            await refreshBookings()
+            return true
+        } catch {
+            logout()
+            return false
+        }
+        #else
+        return false
+        #endif
+    }
+
     func navigate(_ target: UserScreen, remember: Bool = true) {
         if remember, screen != target, screen != .splash {
             previousScreens.append(screen)
@@ -181,50 +224,40 @@ final class UserAppStore: ObservableObject {
     }
 
     func completeLogin(name: String, value: String) {
-        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        toastMessage = "Please sign in securely with your mobile number and OTP."
+    }
+
+    func showOTPLogin() {
+        let cleanName = loginName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = loginPhone.filter(\.isNumber)
         guard !cleanName.isEmpty else {
             toastMessage = "Enter your full name."
             return
         }
-        if loginMode == "Email" {
-            guard cleanValue.contains("@"), cleanValue.contains(".") else {
-                toastMessage = "Enter a valid email address."
-                return
-            }
-        } else {
-            guard cleanValue.filter(\.isNumber).count >= 10 else {
-                toastMessage = "Enter a valid mobile number."
-                return
-            }
+        guard digits.count == 10 else {
+            toastMessage = "Enter a valid 10-digit mobile number."
+            return
         }
         guard !isAuthenticating else { return }
+        loginName = cleanName
+        loginPhone = String(digits.suffix(10))
         isAuthenticating = true
         Task {
+            defer { isAuthenticating = false }
             do {
-                let token = try await firebaseSessionToken()
-                secureStore.set(token, for: tokenKey)
-                authToken = token
-                profile.name = cleanName
-                if loginMode == "Email" {
-                    profile.email = cleanValue
-                } else {
-                    profile.phone = cleanValue.filter(\.isNumber)
-                }
-                showLoginSheet = false
-                startupLocationPhase = .idle
-                startupManualAddress = ""
-                isStartupManualEntry = false
-                navigate(.startupLocation, remember: false)
-                _ = await notificationService.requestPermission()
-                await syncUserProfile()
-                await refreshBookings()
-                await openPendingNotificationDeepLinkIfNeeded()
+                let response = try await api.sendLoginOTP(phone: loginPhone)
+                loginOTPRequestID = response.requestId
+                loginOTPExpiresInSeconds = max(1, response.expiresInSeconds)
+                navigate(.otp)
             } catch {
                 toastMessage = error.localizedDescription
             }
-            isAuthenticating = false
         }
+    }
+
+    func skipLoginToHome() {
+        previousScreens.removeAll()
+        screen = .home
     }
 
     func requestAccountDeletion(reason: String) async -> Bool {
@@ -236,10 +269,8 @@ final class UserAppStore: ObservableObject {
                 reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
                 token: apiToken
             )
-#if canImport(FirebaseAuth)
-            try await Auth.auth().currentUser?.delete()
-#endif
             logout()
+            toastMessage = "Account deleted successfully."
             return true
         } catch {
             toastMessage = error.localizedDescription
@@ -247,12 +278,79 @@ final class UserAppStore: ObservableObject {
         }
     }
 
-    private func firebaseSessionToken() async throws -> String {
-        #if canImport(FirebaseAuth)
-        if let current = Auth.auth().currentUser {
-            return try await current.getIDToken()
+    func saveProfileChanges() async {
+        profile.name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.phone = String(profile.phone.filter(\.isNumber).suffix(10))
+        profile.email = profile.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard profile.isValid else {
+            toastMessage = "Enter a valid name and 10-digit mobile number."
+            return
         }
-        let result = try await Auth.auth().signInAnonymously()
+        if !profile.email.isEmpty, (!profile.email.contains("@") || !profile.email.contains(".")) {
+            toastMessage = "Enter a valid email address."
+            return
+        }
+        do {
+            try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: apiToken)
+            showEditProfileSheet = false
+            toastMessage = "Profile updated successfully."
+        } catch {
+            toastMessage = error.localizedDescription
+        }
+    }
+
+    func resendLoginOTP() async -> Bool {
+        guard !isAuthenticating else { return false }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+        do {
+            let response = try await api.sendLoginOTP(phone: loginPhone)
+            loginOTPRequestID = response.requestId
+            loginOTPExpiresInSeconds = max(1, response.expiresInSeconds)
+            return true
+        } catch {
+            toastMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func verifyLoginOTP(_ otp: String) async -> Bool {
+        guard !isAuthenticating else { return false }
+        guard !loginOTPRequestID.isEmpty else {
+            toastMessage = "OTP session expired. Please request a new OTP."
+            return false
+        }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+        do {
+            let verification = try await api.verifyLoginOTP(
+                phone: loginPhone,
+                requestId: loginOTPRequestID,
+                otp: otp
+            )
+            let token = try await firebaseSessionToken(customToken: verification.customToken)
+            secureStore.set(token, for: tokenKey)
+            authToken = token
+            profile.name = loginName
+            profile.phone = verification.phone.filter(\.isNumber).suffix(10).description
+            loginOTPRequestID = ""
+            startupLocationPhase = .idle
+            startupManualAddress = ""
+            isStartupManualEntry = false
+            navigate(.startupLocation, remember: false)
+            await syncUserProfile()
+            await refreshBookings()
+            await openPendingNotificationDeepLinkIfNeeded()
+            return true
+        } catch {
+            toastMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func firebaseSessionToken(customToken: String) async throws -> String {
+        #if canImport(FirebaseAuth)
+        let result = try await Auth.auth().signIn(withCustomToken: customToken)
         return try await result.user.getIDToken()
         #else
         throw APIError.badResponse("Authentication is unavailable in this build.")
@@ -387,15 +485,16 @@ final class UserAppStore: ObservableObject {
     }
 
     func startBooking(_ service: ServiceItem) {
+        selectedService = service
+        guard isLoggedIn, !apiToken.isEmpty else {
+            previousScreens.removeAll()
+            screen = .login
+            toastMessage = "Sign in with your mobile number to book a service."
+            return
+        }
         bookingLocationTask?.cancel()
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
-        selectedService = service
-        if Self.preparingServiceIDs.contains(service.id) {
-            navigate(.preparing)
-            return
-        }
-        bookingRequestID = "IOS-\(UUID().uuidString)"
         draft = BookingDraft(
             problem: "",
             address: addressMode == .current ? "Detecting your current service location..." : "",
@@ -418,6 +517,7 @@ final class UserAppStore: ObservableObject {
         selectedLaundryItems = [:]
         navigate(.booking)
     }
+
 
     func useCurrentLocation() {
         guard bookingLocationTask == nil else { return }
@@ -643,14 +743,14 @@ final class UserAppStore: ObservableObject {
         bookingActionInFlight = true
         Task {
             do {
-                let live = try await api.updateBookingStatus(booking.id, status: "cancelled", finalAmount: 0, token: apiToken)
+                let live = try await api.cancelBooking(booking.id, token: apiToken)
                 latestBooking = live
                 upsertBooking(live)
                 stopBookingPolling()
                 navigate(.bookings, remember: false)
                 toastMessage = "Booking cancelled successfully."
             } catch {
-                toastMessage = "Booking cancellation failed. Please retry."
+                toastMessage = error.localizedDescription
             }
             bookingActionInFlight = false
         }
@@ -685,7 +785,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func requestCancellation(_ booking: Booking) {
-        guard ["pending", "accepted", "on_the_way", "arrived"].contains(booking.status) else {
+        guard ["pending", "sent_to_partner", "accepted", "on_the_way", "arrived"].contains(booking.status) else {
             toastMessage = "Booking cannot be cancelled after work starts."
             return
         }
@@ -808,9 +908,33 @@ final class UserAppStore: ObservableObject {
 
     func sendSupportMessage(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        supportMessages.append(ChatMessage(id: UUID().uuidString, bookingId: "support", bookingCode: "", senderRole: "user", senderName: "You", message: clean, clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
-        supportMessages.append(ChatMessage(id: UUID().uuidString, bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: supportReply(for: clean), clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
+        guard !clean.isEmpty, isLoggedIn else {
+            toastMessage = "Please sign in to contact support."
+            return
+        }
+        let clientMessageId = UUID().uuidString
+        let ticketId: String
+        if let saved = defaults.string(forKey: supportTicketKey), !saved.isEmpty {
+            ticketId = saved
+        } else {
+            ticketId = "ios-\(UUID().uuidString)"
+            defaults.set(ticketId, forKey: supportTicketKey)
+        }
+        supportMessages.append(ChatMessage(id: clientMessageId, bookingId: "support", bookingCode: "", senderRole: "user", senderName: "You", message: clean, clientMessageId: clientMessageId, deliveryStatus: "sending", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
+        Task {
+            do {
+                try await api.sendSupportTicketMessage(ticketId: ticketId, clientMessageId: clientMessageId, message: clean, token: apiToken)
+                if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
+                    supportMessages[index].deliveryStatus = "sent"
+                }
+                toastMessage = "Message sent to ApnaServo Support."
+            } catch {
+                if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
+                    supportMessages[index].deliveryStatus = "failed"
+                }
+                toastMessage = error.localizedDescription
+            }
+        }
     }
 
     func markNotificationRead(_ item: AppNotificationItem) {
@@ -936,6 +1060,7 @@ final class UserAppStore: ObservableObject {
         bookings = []
         submittedRatings = [:]
         defaults.removeObject(forKey: submittedRatingsKey)
+        defaults.removeObject(forKey: supportTicketKey)
         previousScreens = []
         authToken = ""
         secureStore.set("", for: tokenKey)
@@ -948,11 +1073,29 @@ final class UserAppStore: ObservableObject {
     func configureAppServices() {
         notificationService.configure()
         Task {
-            _ = await notificationService.requestPermission()
             let fcmToken = await notificationService.refreshFCMToken()
             if isLoggedIn, !fcmToken.isEmpty {
                 try? await api.saveFCMToken(fcmToken, token: apiToken)
             }
+        }
+    }
+
+    func enableBookingNotifications() async {
+        let granted = await notificationService.requestPermission()
+        guard granted else {
+            toastMessage = "Notifications are off. You can enable them in iPhone Settings."
+            return
+        }
+        let token = await notificationService.refreshFCMToken()
+        if isLoggedIn, !token.isEmpty {
+            do {
+                try await api.saveFCMToken(token, token: apiToken)
+                toastMessage = "Booking notifications enabled."
+            } catch {
+                toastMessage = error.localizedDescription
+            }
+        } else {
+            toastMessage = "Booking notifications enabled."
         }
     }
 
