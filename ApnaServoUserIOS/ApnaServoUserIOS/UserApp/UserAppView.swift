@@ -771,8 +771,8 @@ struct HomeScreen: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         HomeHero(
-                            height: min(340, max(292, physicalScreenHeight * 0.38)),
-                            showSearch: $showSearch
+                            showSearch: $showSearch,
+                            height: min(340, max(292, physicalScreenHeight * 0.38))
                         )
                         .frame(width: proxy.size.width)
                         VStack(spacing: 18) {
