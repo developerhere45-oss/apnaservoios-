@@ -830,7 +830,7 @@ struct HomeHero: View {
                 ForEach(slides.indices, id: \.self) { index in
                     let slide = slides[index]
                     HomeHeroSlideView(slide: slide, height: height) {
-                        store.startBooking(ServiceCatalog.service(id: slide.id))
+                        store.openService(ServiceCatalog.service(id: slide.id))
                     }
                     .tag(index)
                 }
@@ -1146,7 +1146,7 @@ private struct ServiceSearchOverlay: View {
         Button {
             remember(service)
             isPresented = false
-            DispatchQueue.main.async { store.startBooking(service) }
+            DispatchQueue.main.async { store.openService(service) }
         } label: {
             HStack(spacing: 12) {
                 ServiceLogo(service: service, size: 48)
@@ -1215,7 +1215,7 @@ struct QuickServiceStrip: View {
             ForEach(quickIds, id: \.self) { id in
                 let service = ServiceCatalog.service(id: id)
                 Button {
-                    store.startBooking(service)
+                    store.openService(service)
                 } label: {
                     VStack(spacing: 7) {
                         ServiceLogo(service: service, size: 52)
@@ -1345,7 +1345,7 @@ struct HomeServiceCard: View {
 
     var body: some View {
         Button {
-            store.startBooking(service)
+            store.openService(service)
         } label: {
             VStack(spacing: 0) {
                 AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
@@ -1511,7 +1511,7 @@ struct ServiceListCard: View {
 
     var body: some View {
         Button {
-            store.startBooking(service)
+            store.openService(service)
         } label: {
             HStack(spacing: 12) {
                 ServiceLogo(service: service, size: 66)
