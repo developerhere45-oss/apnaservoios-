@@ -431,6 +431,11 @@ struct SendChatEnvelope: Decodable {
 
 struct EmptyResponse: Decodable {}
 
+struct SupportTicketSyncResponse: Decodable {
+    let ticketId: String
+    let status: String
+}
+
 struct OTPSendResponse: Decodable {
     let requestId: String
     let expiresInSeconds: Int

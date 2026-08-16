@@ -473,8 +473,7 @@ final class UserAppStore: ObservableObject {
     }
 
     func openService(_ service: ServiceItem) {
-        selectedService = service
-        navigate(.detail)
+        startBooking(service)
     }
 
     func showAllServices(category: String? = nil) {
@@ -486,12 +485,6 @@ final class UserAppStore: ObservableObject {
 
     func startBooking(_ service: ServiceItem) {
         selectedService = service
-        guard isLoggedIn, !apiToken.isEmpty else {
-            previousScreens.removeAll()
-            screen = .login
-            toastMessage = "Sign in with your mobile number to book a service."
-            return
-        }
         bookingLocationTask?.cancel()
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
@@ -626,7 +619,9 @@ final class UserAppStore: ObservableObject {
     func confirmBooking() {
         guard !isBookingSubmitting else { return }
         guard isLoggedIn, !apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            toastMessage = "Your session expired. Please sign in again before booking."
+            previousScreens.removeAll()
+            screen = .login
+            toastMessage = "Sign in with your mobile number to confirm this booking."
             return
         }
         let address = bookingAddressPreview()
@@ -664,7 +659,7 @@ final class UserAppStore: ObservableObject {
                 navigate(.bookingConfirmed)
                 startBookingPolling()
             } catch {
-                toastMessage = "Booking was not confirmed. Check your connection and tap Confirm Booking again."
+                toastMessage = error.localizedDescription
             }
             isBookingSubmitting = false
         }
@@ -923,11 +918,11 @@ final class UserAppStore: ObservableObject {
         supportMessages.append(ChatMessage(id: clientMessageId, bookingId: "support", bookingCode: "", senderRole: "user", senderName: "You", message: clean, clientMessageId: clientMessageId, deliveryStatus: "sending", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
         Task {
             do {
-                try await api.sendSupportTicketMessage(ticketId: ticketId, clientMessageId: clientMessageId, message: clean, token: apiToken)
+                let ticket = try await api.sendSupportTicketMessage(ticketId: ticketId, clientMessageId: clientMessageId, message: clean, token: apiToken)
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "sent"
                 }
-                toastMessage = "Message sent to ApnaServo Support."
+                toastMessage = "Complaint ticket \(ticket.ticketId) sent to ApnaServo Support."
             } catch {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "failed"

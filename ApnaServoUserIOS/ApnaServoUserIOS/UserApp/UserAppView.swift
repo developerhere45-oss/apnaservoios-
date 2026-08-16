@@ -946,19 +946,19 @@ private struct HomeHeroSlideView: View {
     let bookAction: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            AndroidAssetImage(name: slide.asset, contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .frame(height: height)
-                .clipped()
-            LinearGradient(
-                colors: [Color(hex: 0xFFF8F4).opacity(0.98), Color(hex: 0xFFF8F4).opacity(0.72), .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            LinearGradient(colors: [.white.opacity(0.1), .clear, AppTheme.bg.opacity(0.28)], startPoint: .top, endPoint: .bottom)
+        GeometryReader { proxy in
+            ZStack(alignment: .bottomLeading) {
+                AndroidAssetImage(name: slide.asset, contentMode: .fill)
+                    .frame(width: proxy.size.width, height: height)
+                    .clipped()
+                LinearGradient(
+                    colors: [Color(hex: 0xFFF8F4).opacity(0.98), Color(hex: 0xFFF8F4).opacity(0.76), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                LinearGradient(colors: [.white.opacity(0.1), .clear, AppTheme.bg.opacity(0.28)], startPoint: .top, endPoint: .bottom)
 
-            VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text("VERIFIED SERVICE ✓")
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(AppTheme.rose)
@@ -970,24 +970,25 @@ private struct HomeHeroSlideView: View {
                     Text(slide.subtitle)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.ink.opacity(0.78))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Button(action: bookAction) {
-                    Text("Book Now ›")
-                        .font(.system(size: 12, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(width: 112, height: 34)
-                        .background(Color(hex: 0x11141A), in: Capsule())
-                        .overlay(Capsule().stroke(AppTheme.rose, lineWidth: 1))
+                    Button(action: bookAction) {
+                        Text("Book Now ›")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundStyle(.white)
+                            .frame(width: 112, height: 34)
+                            .background(Color(hex: 0x11141A), in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.rose, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .frame(width: min(max(proxy.size.width * 0.60, 190), 250), alignment: .leading)
+                .padding(.leading, 16)
+                .padding(.bottom, 22)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, 110)
-            .padding(.horizontal, 14)
-            .padding(.bottom, 23)
         }
+        .frame(height: height)
     }
 
     private var titleSize: CGFloat {

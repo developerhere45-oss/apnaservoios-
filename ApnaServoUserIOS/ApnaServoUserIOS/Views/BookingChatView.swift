@@ -18,8 +18,15 @@ struct BookingChatView: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 10) {
-                        if store.bookingChatMessages.isEmpty {
-                            EmptyState(title: "No chat yet", subtitle: "Chat opens after partner assignment.")
+                        if !hasAssignedPartner {
+                            EmptyState(title: "Partner chat is not open yet", subtitle: "Chat becomes available automatically after a service partner accepts your booking.")
+                            Button("Report an Issue to Support") {
+                                store.navigate(.support)
+                            }
+                            .roseCTA()
+                            .padding(.top, 10)
+                        } else if store.bookingChatMessages.isEmpty {
+                            EmptyState(title: "No messages yet", subtitle: "Send a message to your assigned service partner.")
                         } else {
                             ForEach(store.bookingChatMessages) { message in
                                 ChatMessageBubble(message: message, isMe: message.senderRole == "user")
@@ -36,12 +43,19 @@ struct BookingChatView: View {
                 }
             }
 
-            ChatInputDock(placeholder: "Message partner", text: $text) {
-                store.sendBookingChat(text)
-                text = ""
+            if hasAssignedPartner {
+                ChatInputDock(placeholder: "Message partner", text: $text) {
+                    store.sendBookingChat(text)
+                    text = ""
+                }
             }
         }
         .background(AppTheme.bg)
+    }
+
+    private var hasAssignedPartner: Bool {
+        guard let booking = store.latestBooking else { return false }
+        return !booking.partnerId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

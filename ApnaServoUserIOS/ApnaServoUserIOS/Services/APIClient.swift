@@ -91,7 +91,7 @@ final class APIClient {
         return user
     }
 
-    func sendSupportTicketMessage(ticketId: String, clientMessageId: String, message: String, token: String) async throws {
+    func sendSupportTicketMessage(ticketId: String, clientMessageId: String, message: String, token: String) async throws -> SupportTicketSyncResponse {
         let body: [String: Any] = [
             "ticketId": ticketId,
             "clientMessageId": clientMessageId,
@@ -102,7 +102,7 @@ final class APIClient {
             "priority": "normal",
             "source": "ios_user_app"
         ]
-        let _: EmptyResponse = try await request(path: "/users/support-tickets/sync", method: "POST", token: token, body: body)
+        return try await request(path: "/users/support-tickets/sync", method: "POST", token: token, body: body)
     }
 
     func fetchNotifications(token: String) async throws -> [AppNotificationItem] {
