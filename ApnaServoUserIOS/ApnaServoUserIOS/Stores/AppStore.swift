@@ -614,6 +614,10 @@ final class UserAppStore: ObservableObject {
 
     func startBooking(_ service: ServiceItem) {
         selectedService = service
+        if Self.unavailableServiceIDs.contains(service.id) {
+            navigate(.serviceLaunching)
+            return
+        }
         bookingLocationTask?.cancel()
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
@@ -685,6 +689,11 @@ final class UserAppStore: ObservableObject {
     func continueToConfirm() {
         if selectedService.id == "laundry" && selectedLaundryItems.isEmpty {
             toastMessage = "Please select at least one laundry item."
+            return
+        }
+        profile.phone = String(profile.phone.filter(\.isNumber).suffix(10))
+        guard profile.phone.count == 10 else {
+            toastMessage = "Enter a valid 10-digit contact mobile number for this booking."
             return
         }
         if houseFlat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1161,13 +1170,10 @@ final class UserAppStore: ObservableObject {
     func openCommercialService(_ title: String, serviceId: String) {
         selectedCommercialServiceTitle = title
         selectedCommercialServiceId = serviceId
-        selectedService = ServiceCatalog.service(id: serviceId)
-        navigate(.preparing)
+        startBooking(ServiceCatalog.service(id: serviceId))
     }
 
-    private static let preparingServiceIDs: Set<String> = [
-        "roadside", "painting", "interior", "ro", "pest"
-    ]
+    private static let unavailableServiceIDs: Set<String> = ["carpenter", "painting"]
 
     func logout() {
         stopBookingPolling()

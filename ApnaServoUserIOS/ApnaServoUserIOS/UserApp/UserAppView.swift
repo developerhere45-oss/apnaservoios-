@@ -440,7 +440,7 @@ struct OTPVerificationScreen: View {
                 .disabled(otp.count != 6 || store.isAuthenticating)
                 .opacity(otp.count == 6 && !store.isAuthenticating ? 1 : 0.65)
 
-                safeCard(title: "Your data is 100% secure with us.", subtitle: "We never share your details with anyone.")
+                safeCard(title: "Your data is protected.", subtitle: "We use your details only to provide and support your requested service.")
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 18)
@@ -1423,7 +1423,7 @@ struct WhyChooseCard: View {
                 divider
                 feature("clock", "On-time\nService", Color(hex: 0x2A7CE6))
                 divider
-                feature("star", "100%\nSatisfaction", Color(hex: 0xEBA822))
+                feature("headphones", "Customer\nSupport", Color(hex: 0xEBA822))
             }
             .frame(height: 84)
         }
@@ -1650,7 +1650,7 @@ struct ServiceLaunchingScreen: View {
                     launchTitle
                         .padding(.top, 42)
 
-                    Text("Service booking is temporarily unavailable.\nGet ready for a smoother, faster & smarter\nservice experience with ApnaServo!")
+                    Text("This service is not currently offered in your selected area.\nChoose another service or contact support for assistance.")
                         .font(.system(size: 15))
                         .multilineTextAlignment(.center)
                         .lineSpacing(5)
@@ -1681,7 +1681,7 @@ struct ServiceLaunchingScreen: View {
                     .buttonStyle(.plain)
                     .padding(.top, 40)
 
-                    Text("♥  Thank you for your patience and support!")
+                    Text("Need help? Open Profile → Help & Support.")
                         .font(.system(size: 14))
                         .foregroundStyle(AppTheme.muted)
                         .padding(.top, 24)
@@ -1698,27 +1698,16 @@ struct ServiceLaunchingScreen: View {
 
     private var launchTitle: some View {
         VStack(spacing: -9) {
-            HStack(alignment: .bottom, spacing: 5) {
-                Text("We’re almost ready")
-                    .font(.system(size: 12, weight: .semibold))
-                    .rotationEffect(.degrees(-16))
-                Text("✦").foregroundStyle(AppTheme.loginRose)
-            }
-            .offset(x: -86)
-            Text("Launching on")
+            Text("Service")
                 .font(.custom("Georgia", size: 43).weight(.bold))
                 .foregroundStyle(AppTheme.ink)
-            Text("20th")
-                .font(.custom("Georgia", size: 68).weight(.bold))
-                .foregroundStyle(AppTheme.loginRose)
             HStack(spacing: 10) {
                 Text("✦")
-                Text("August")
+                Text("Unavailable")
                     .font(.custom("Georgia", size: 52).weight(.bold))
-                Image(systemName: "airplane")
+                Image(systemName: "mappin.slash")
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(AppTheme.loginRoseDark)
-                    .rotationEffect(.degrees(-42))
             }
             .foregroundStyle(AppTheme.ink)
         }
@@ -1800,17 +1789,9 @@ struct DetailTrustSummary: View {
             Text(service.name)
                 .font(.system(size: 22, weight: .black))
                 .foregroundStyle(AppTheme.ink)
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(AppTheme.orange)
-                Text("4.7")
-                    .font(.system(size: 17, weight: .black))
-                    .foregroundStyle(AppTheme.ink)
-                Text("(2.3K reviews)")
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.muted)
-            }
+            Label("Clear quote before paid work", systemImage: "checkmark.seal.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.green)
             HStack(spacing: 8) {
                 trustChip("Verified", color: AppTheme.green)
                 trustChip("Skilled Experts", color: AppTheme.purple)
@@ -1867,8 +1848,8 @@ struct GuaranteeStrip: View {
     var body: some View {
         HStack(spacing: 8) {
             guarantee("Experienced\nTechnicians", "person.badge.shield.checkmark.fill")
-            guarantee("Genuine\nSpare Parts", "wrench.and.screwdriver.fill")
-            guarantee("30 Days\nWarranty", "checkmark.seal.fill")
+            guarantee("Clear\nQuotes", "wrench.and.screwdriver.fill")
+            guarantee("In-app\nSupport", "checkmark.seal.fill")
         }
     }
 
@@ -2191,6 +2172,14 @@ struct AddressSelectionCard: View {
                 addressModeButton(.current, title: "Current", image: "booking_icon_current_location")
                 addressModeButton(.manual, title: "Manual", image: "booking_icon_manual_address")
             }
+
+            labeledFormField(
+                "Contact Mobile Number",
+                placeholder: "10-digit number for service coordination",
+                text: $store.profile.phone,
+                required: true,
+                keyboard: .phonePad
+            )
 
             if store.addressMode == .current {
                 currentAddressFields

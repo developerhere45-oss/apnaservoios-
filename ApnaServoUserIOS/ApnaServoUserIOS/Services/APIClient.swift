@@ -148,7 +148,6 @@ final class APIClient {
             "userPhone": profile.phone,
             "phone": profile.phone,
             "userEmail": profile.email,
-            "phoneVerified": true,
             "userFcmToken": fcmToken
         ]
         let envelope: BookingEnvelope = try await request(path: "/bookings", method: "POST", token: token, body: body)
