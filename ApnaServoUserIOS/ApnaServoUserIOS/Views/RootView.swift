@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import UIKit
 
 struct RootView: View {
@@ -201,6 +202,20 @@ struct LegalInformationSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("Reason (optional)", text: $deletionReason, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                if store.requiresAppleDeletionAuthorization {
+                    Text("For your security, confirm your Apple account before permanent deletion. This also revokes ApnaServo's Sign in with Apple authorization.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    SignInWithAppleButton(.continue) { request in
+                        store.prepareAppleAccountDeletion(request)
+                    } onCompletion: { result in
+                        store.completeAppleAccountDeletionAuthorization(result)
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 50)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
                 Button(role: .destructive) {
                     showDeletionConfirmation = true
                 } label: {
@@ -211,7 +226,7 @@ struct LegalInformationSheet: View {
                         Spacer()
                     }
                 }
-                .disabled(store.isDeletingAccount)
+                .disabled(store.isDeletingAccount || store.requiresAppleDeletionAuthorization)
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
 

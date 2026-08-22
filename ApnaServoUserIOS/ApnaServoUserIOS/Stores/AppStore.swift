@@ -65,6 +65,7 @@ final class UserAppStore: ObservableObject {
     @Published var showLegalSheet = false
     @Published var isAuthenticating = false
     @Published var isDeletingAccount = false
+    @Published private(set) var appleDeletionAuthorizationRevoked = false
     @Published var showCancelSheet = false
     @Published var showCounterOfferSheet = false
     @Published var showReviewSheet = false
@@ -111,6 +112,15 @@ final class UserAppStore: ObservableObject {
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
     private let supportTicketKey = "apnaservo_user_support_ticket_id"
     private var currentAppleNonce: String?
+
+    var requiresAppleDeletionAuthorization: Bool {
+        #if canImport(FirebaseAuth)
+        return Auth.auth().currentUser?.providerData.contains(where: { $0.providerID == "apple.com" }) == true
+            && !appleDeletionAuthorizationRevoked
+        #else
+        return false
+        #endif
+    }
 
     init() {
         if let data = defaults.data(forKey: submittedRatingsKey),
@@ -341,8 +351,46 @@ final class UserAppStore: ObservableObject {
         return result
     }
 
+    func prepareAppleAccountDeletion(_ request: ASAuthorizationAppleIDRequest) {
+        request.requestedScopes = []
+    }
+
+    func completeAppleAccountDeletionAuthorization(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .failure(let error):
+            if (error as? ASAuthorizationError)?.code != .canceled {
+                toastMessage = "Apple account confirmation failed. Please try again."
+            }
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let codeData = credential.authorizationCode,
+                  let authorizationCode = String(data: codeData, encoding: .utf8),
+                  !authorizationCode.isEmpty else {
+                toastMessage = "Apple account confirmation was incomplete. Please try again."
+                return
+            }
+            Task {
+                do {
+                    #if canImport(FirebaseAuth)
+                    try await Auth.auth().revokeToken(withAuthorizationCode: authorizationCode)
+                    appleDeletionAuthorizationRevoked = true
+                    toastMessage = "Apple account confirmed. You can now permanently delete your account."
+                    #else
+                    throw APIError.badResponse("Apple account confirmation is unavailable in this build.")
+                    #endif
+                } catch {
+                    toastMessage = "Apple account confirmation failed. Please check your connection and try again."
+                }
+            }
+        }
+    }
+
     func requestAccountDeletion(reason: String) async -> Bool {
         guard !isDeletingAccount else { return false }
+        guard !requiresAppleDeletionAuthorization else {
+            toastMessage = "Confirm your Apple account before deleting it."
+            return false
+        }
         isDeletingAccount = true
         defer { isDeletingAccount = false }
         do {
@@ -1137,6 +1185,7 @@ final class UserAppStore: ObservableObject {
         submittedRatings = [:]
         defaults.removeObject(forKey: submittedRatingsKey)
         defaults.removeObject(forKey: supportTicketKey)
+        appleDeletionAuthorizationRevoked = false
         previousScreens = []
         authToken = ""
         secureStore.set("", for: tokenKey)
