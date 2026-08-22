@@ -158,35 +158,72 @@ struct LegalInformationSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Legal & Account")
-                    .font(.system(size: 24, weight: .bold))
-                Text("Privacy Policy")
-                    .font(.system(size: 17, weight: .bold))
-                Text("ApnaServo keeps profile, address, booking and support details only for service fulfilment and live service updates.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.muted)
-                Button("Open Full Privacy Policy") {
-                    UIApplication.shared.open(AppConfig.privacyPolicyURL)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("Legal & Account")
+                        .font(.system(size: 24, weight: .bold))
+                    Spacer()
+                    Button("Done") { dismiss() }
+                }
+
+                legalSection(
+                    title: "Privacy Policy",
+                    detail: "Explains the account, booking, location, support and notification data ApnaServo processes and how you can delete your account."
+                )
+                Link("Open Privacy Policy", destination: AppConfig.privacyPolicyURL)
+                    .outlineCTA()
+
+                legalSection(
+                    title: "Terms & Conditions",
+                    detail: "Covers bookings, service quotes, cancellations, customer conduct, support and account responsibilities."
+                )
+                Link("Open Terms & Conditions", destination: AppConfig.termsURL)
+                    .outlineCTA()
+
+                legalSection(
+                    title: "Contact Support",
+                    detail: "Use authenticated support chat for booking, account, cancellation, privacy or safety assistance."
+                )
+                Button("Open Help & Support") {
+                    dismiss()
+                    store.navigate(.support)
                 }
                 .outlineCTA()
-                Text("Terms")
-                    .font(.system(size: 17, weight: .bold))
-                Text("Final amount is confirmed after inspection. No upfront payment is collected before service completion.")
+
+                Divider()
+
+                Label("Permanently Delete Account", systemImage: "trash.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.red)
+                Text("This permanently deletes your ApnaServo account, authentication identity, profile, saved addresses, device tokens, support conversations and other personal data. Booking records retained for transaction integrity are de-identified. This action cannot be undone.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
-                Text("Delete Account")
-                    .font(.system(size: 17, weight: .bold))
-                Text("Permanently deletes your account, profile, saved addresses, device tokens, support conversations and other personal data. Booking records that must be retained are de-identified. You will be signed out immediately.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 TextField("Reason (optional)", text: $deletionReason, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                Button("Delete Account", role: .destructive) {
+                Button(role: .destructive) {
                     showDeletionConfirmation = true
+                } label: {
+                    HStack {
+                        Spacer()
+                        if store.isDeletingAccount { ProgressView() }
+                        Text(store.isDeletingAccount ? "Deleting Account…" : "Delete Account Permanently")
+                        Spacer()
+                    }
                 }
                 .disabled(store.isDeletingAccount)
-                .outlineCTA()
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+
+                Divider()
+                Text("About ApnaServo")
+                    .font(.system(size: 17, weight: .bold))
+                Text("ApnaServo connects customers with verified service partners for home and commercial service requests in supported areas.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.muted)
+                Text("App version \(appVersion)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
             }
             .padding(20)
         }
@@ -205,7 +242,24 @@ struct LegalInformationSheet: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently deletes your account and cannot be undone.")
+            Text("Your authentication identity, profile and personal data will be permanently deleted. Retained booking records will be de-identified. This cannot be undone.")
         }
+    }
+
+    private func legalSection(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 17, weight: .bold))
+            Text(detail)
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
     }
 }

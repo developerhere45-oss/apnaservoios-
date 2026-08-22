@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import UIKit
 import Combine
 
@@ -247,6 +248,16 @@ struct LoginScreen: View {
                             .roseCTA()
                         }
                         .buttonStyle(.plain)
+
+                        SignInWithAppleButton(.signIn) { request in
+                            store.prepareAppleSignIn(request)
+                        } onCompletion: { result in
+                            store.completeAppleSignIn(result)
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .disabled(store.isAuthenticating)
 
                         HStack { Rectangle().frame(height: 1); Text("or"); Rectangle().frame(height: 1) }
                             .foregroundStyle(AppTheme.line)
@@ -3373,6 +3384,9 @@ struct ProfileScreen: View {
                         store.navigate(.support)
                     }
                     profileAction("Legal & Account", "Privacy, terms and deletion", "shield.fill") {
+                        store.showLegalSheet = true
+                    }
+                    profileAction("Delete Account", "Permanently delete your account and personal data", "trash.fill") {
                         store.showLegalSheet = true
                     }
                     profileAction("About ApnaServo", "Trusted home repair services", "info.circle.fill") {

@@ -178,8 +178,11 @@ struct UserProfile: Codable, Hashable {
     var lng: Double = AppConfig.defaultLongitude
 
     var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        phone.filter(\.isNumber).count == 10
+        let hasName = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPhone = phone.filter(\.isNumber).count == 10
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasEmail = cleanEmail.contains("@") && cleanEmail.contains(".")
+        return hasName && (hasPhone || hasEmail)
     }
 }
 

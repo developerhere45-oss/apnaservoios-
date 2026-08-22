@@ -179,6 +179,11 @@
 				TargetAttributes = {
 					1A0005010000000000000001 = {
 						CreatedOnToolsVersion = 15.4;
+						SystemCapabilities = {
+							com.apple.SignInWithApple = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};

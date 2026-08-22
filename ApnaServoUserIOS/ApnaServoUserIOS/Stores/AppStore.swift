@@ -2,6 +2,9 @@ import Foundation
 import CoreLocation
 import SwiftUI
 import UIKit
+import AuthenticationServices
+import CryptoKit
+import Security
 
 #if canImport(FirebaseAuth)
 import FirebaseAuth
@@ -107,6 +110,7 @@ final class UserAppStore: ObservableObject {
     private let tokenKey = "user_api_token"
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
     private let supportTicketKey = "apnaservo_user_support_ticket_id"
+    private var currentAppleNonce: String?
 
     init() {
         if let data = defaults.data(forKey: submittedRatingsKey),
@@ -260,6 +264,83 @@ final class UserAppStore: ObservableObject {
         screen = .home
     }
 
+    func prepareAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = randomNonceString()
+        currentAppleNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func completeAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        guard !isAuthenticating else { return }
+        switch result {
+        case .failure(let error):
+            currentAppleNonce = nil
+            if (error as? ASAuthorizationError)?.code != .canceled {
+                toastMessage = "Sign in with Apple could not be completed. Please try again."
+            }
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let nonce = currentAppleNonce,
+                  let tokenData = credential.identityToken,
+                  let identityToken = String(data: tokenData, encoding: .utf8) else {
+                currentAppleNonce = nil
+                toastMessage = "Apple sign-in credential was incomplete. Please try again."
+                return
+            }
+            currentAppleNonce = nil
+            isAuthenticating = true
+            Task {
+                defer { isAuthenticating = false }
+                do {
+                    #if canImport(FirebaseAuth)
+                    let firebaseCredential = OAuthProvider.appleCredential(
+                        withIDToken: identityToken,
+                        rawNonce: nonce,
+                        fullName: credential.fullName
+                    )
+                    let result = try await Auth.auth().signIn(with: firebaseCredential)
+                    let token = try await result.user.getIDToken(forcingRefresh: true)
+                    let appleName = PersonNameComponentsFormatter().string(from: credential.fullName ?? PersonNameComponents())
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    profile.name = appleName.isEmpty ? (result.user.displayName ?? "ApnaServo Customer") : appleName
+                    profile.email = result.user.email ?? credential.email ?? ""
+                    profile.phone = String((result.user.phoneNumber ?? "").filter(\.isNumber).suffix(10))
+                    secureStore.set(token, for: tokenKey)
+                    authToken = token
+                    await syncUserProfile()
+                    startupLocationPhase = .idle
+                    startupManualAddress = ""
+                    isStartupManualEntry = false
+                    navigate(.startupLocation, remember: false)
+                    await refreshBookings()
+                    #else
+                    throw APIError.badResponse("Sign in with Apple is unavailable in this build.")
+                    #endif
+                } catch {
+                    toastMessage = "Sign in with Apple failed. Please check your connection and try again."
+                }
+            }
+        }
+    }
+
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let characters = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        while remainingLength > 0 {
+            var random: UInt8 = 0
+            let status = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+            guard status == errSecSuccess else { continue }
+            if Int(random) < characters.count {
+                result.append(characters[Int(random)])
+                remainingLength -= 1
+            }
+        }
+        return result
+    }
+
     func requestAccountDeletion(reason: String) async -> Bool {
         guard !isDeletingAccount else { return false }
         isDeletingAccount = true
@@ -283,7 +364,7 @@ final class UserAppStore: ObservableObject {
         profile.phone = String(profile.phone.filter(\.isNumber).suffix(10))
         profile.email = profile.email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard profile.isValid else {
-            toastMessage = "Enter a valid name and 10-digit mobile number."
+            toastMessage = "Enter a valid name and either a mobile number or email address."
             return
         }
         if !profile.email.isEmpty, (!profile.email.contains("@") || !profile.email.contains(".")) {
