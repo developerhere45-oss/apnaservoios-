@@ -11,6 +11,9 @@ struct RootView: View {
             AppTheme.bg.ignoresSafeArea()
             UserAppView()
         }
+        // The app uses a light, image-led visual system. Keeping this fixed also
+        // prevents UIKit text fields from adopting white Dark Mode placeholder text.
+        .preferredColorScheme(.light)
         .task {
             store.configureAppServices()
             guard store.screen == .splash else { return }

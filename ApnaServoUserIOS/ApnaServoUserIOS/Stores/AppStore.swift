@@ -328,10 +328,35 @@ final class UserAppStore: ObservableObject {
                     throw APIError.badResponse("Sign in with Apple is unavailable in this build.")
                     #endif
                 } catch {
-                    toastMessage = "Sign in with Apple failed. Please check your connection and try again."
+                    toastMessage = appleSignInErrorMessage(for: error)
                 }
             }
         }
+    }
+
+    private func appleSignInErrorMessage(for error: Error) -> String {
+        #if canImport(FirebaseAuth)
+        let authError = AuthErrorCode(rawValue: (error as NSError).code)
+        switch authError {
+        case .operationNotAllowed:
+            return "Apple sign-in is not enabled yet. Please contact support."
+        case .invalidCredential:
+            return "Apple sign-in configuration is invalid. Please update the app and try again."
+        case .networkError:
+            return "Could not reach the sign-in service. Check your connection and try again."
+        case .accountExistsWithDifferentCredential:
+            return "An account already exists with this email. Sign in using its original method."
+        case .userDisabled:
+            return "This account has been disabled. Please contact support."
+        default:
+            #if DEBUG
+            NSLog("Sign in with Apple Firebase error: %@", error.localizedDescription)
+            #endif
+            return "Sign in with Apple failed. Please try again."
+        }
+        #else
+        return "Sign in with Apple is unavailable in this build."
+        #endif
     }
 
     private func randomNonceString(length: Int = 32) -> String {
@@ -571,12 +596,22 @@ final class UserAppStore: ObservableObject {
         switch result {
         case .detected(let point):
             let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
-            let address = await locationService.address(for: coordinate)
-            profile.address = address
+            // A reverse-geocoding request needs network access and may take much
+            // longer than the GPS fix. Do not keep the user on the location gate
+            // while that request is pending.
+            profile.address = "Current location"
             profile.lat = point.latitude
             profile.lng = point.longitude
             startupLocationPhase = .detected
             Task { await syncUserProfile() }
+            Task { [weak self] in
+                guard let self else { return }
+                let address = await self.locationService.address(for: coordinate)
+                guard self.profile.lat == point.latitude,
+                      self.profile.lng == point.longitude else { return }
+                self.profile.address = address
+                await self.syncUserProfile()
+            }
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled,
                   screen == .startupLocation,
