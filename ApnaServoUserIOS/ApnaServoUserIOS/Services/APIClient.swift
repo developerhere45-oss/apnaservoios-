@@ -561,7 +561,11 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        // Service availability only needs an area-level position. Requiring a
+        // ten-metre GPS lock keeps users indoors on the loading screen too long.
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.distanceFilter = kCLDistanceFilterNone
+        manager.activityType = .other
     }
 
     func currentLocation() async -> LocationDetectionResult {
@@ -667,8 +671,20 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private func handleAuthorization(_ status: CLAuthorizationStatus) {
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
+            if let cachedLocation = manager.location,
+               cachedLocation.horizontalAccuracy >= 0,
+               abs(cachedLocation.timestamp.timeIntervalSinceNow) < 300 {
+                finish(.detected(LocationCoordinate(
+                    latitude: cachedLocation.coordinate.latitude,
+                    longitude: cachedLocation.coordinate.longitude
+                )))
+                return
+            }
             scheduleTimeout()
-            manager.requestLocation()
+            // `requestLocation()` can wait indefinitely for a high-accuracy GPS
+            // sample on some devices. Continuous updates also deliver a usable
+            // Wi-Fi/cellular location while GPS is still acquiring a fix.
+            manager.startUpdatingLocation()
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .denied:
@@ -686,7 +702,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             self?.finish(.failure("Location is taking longer than expected. Please retry."))
         }
         timeoutWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: workItem)
     }
 
     private func finish(_ result: LocationDetectionResult) {

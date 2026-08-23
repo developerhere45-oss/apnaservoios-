@@ -623,11 +623,10 @@ final class UserAppStore: ObservableObject {
             startupLocationPhase = .restricted
         case .unavailable:
             startupLocationPhase = .unavailable
-        case .failure(let message):
+        case .failure:
             startupLocationPhase = .failure
-            toastMessage = message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? StartupLocationPhase.failure.message
-                : message
+            // The location screen already presents the retry/manual choices.
+            // Avoid a second alert that hides those actions.
         }
     }
 
