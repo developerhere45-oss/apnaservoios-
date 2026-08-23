@@ -24,6 +24,8 @@ struct UserAppView: View {
             }
         }
         .background(AppTheme.bg)
+        .foregroundStyle(AppTheme.ink)
+        .tint(AppTheme.loginRose)
     }
 
     private var showsBottomNav: Bool {

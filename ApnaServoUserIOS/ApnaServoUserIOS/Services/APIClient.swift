@@ -80,7 +80,12 @@ final class APIClient {
     }
 
     func requestAccountDeletion(reason: String, token: String) async throws {
-        let _: EmptyResponse = try await request(path: "/users/account", method: "DELETE", token: token, body: ["reason": reason])
+        let _: EmptyResponse = try await request(
+            path: "/users/delete-account-request",
+            method: "POST",
+            token: token,
+            body: ["reason": reason]
+        )
     }
 
     func fetchCurrentUser(token: String) async throws -> UserAccountRecord {

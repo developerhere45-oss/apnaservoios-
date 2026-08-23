@@ -14,6 +14,7 @@ struct RootView: View {
         // The app uses a light, image-led visual system. Keeping this fixed also
         // prevents UIKit text fields from adopting white Dark Mode placeholder text.
         .preferredColorScheme(.light)
+        .tint(AppTheme.loginRose)
         .task {
             store.configureAppServices()
             guard store.screen == .splash else { return }
@@ -205,6 +206,7 @@ struct LegalInformationSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("Reason (optional)", text: $deletionReason, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                    .foregroundStyle(AppTheme.ink)
                 if store.requiresAppleDeletionAuthorization {
                     Text("For your security, confirm your Apple account before permanent deletion. This also revokes ApnaServo's Sign in with Apple authorization.")
                         .font(.system(size: 13))

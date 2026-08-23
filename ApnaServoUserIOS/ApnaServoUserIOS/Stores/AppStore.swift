@@ -424,7 +424,7 @@ final class UserAppStore: ObservableObject {
                 token: apiToken
             )
             logout()
-            toastMessage = "Account deleted successfully."
+            toastMessage = "Account deletion request submitted successfully."
             return true
         } catch {
             toastMessage = error.localizedDescription
