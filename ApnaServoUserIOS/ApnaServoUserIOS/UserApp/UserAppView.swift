@@ -237,19 +237,26 @@ struct LoginScreen: View {
                             .font(.system(size: 14))
                             .foregroundStyle(AppTheme.muted)
 
-                        loginField(icon: "person.fill", placeholder: "Enter your full name", text: $store.loginName, field: .name)
+                        loginField(icon: "person.fill", placeholder: "Full name (optional)", text: $store.loginName, field: .name)
                         phoneField
 
                         Button { store.showOTPLogin() } label: {
                             HStack {
                                 Spacer()
-                                Text("Send OTP")
+                                if store.isAuthenticating {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text("Send OTP")
+                                }
                                 Spacer()
-                                Image(systemName: "arrow.right")
+                                if !store.isAuthenticating {
+                                    Image(systemName: "arrow.right")
+                                }
                             }
                             .roseCTA()
                         }
                         .buttonStyle(.plain)
+                        .disabled(store.isAuthenticating)
 
                         SignInWithAppleButton(.signIn) { request in
                             store.prepareAppleSignIn(request)
@@ -279,6 +286,7 @@ struct LoginScreen: View {
                     .padding(18)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .shadow(color: .black.opacity(0.08), radius: 16, y: 7)
+                    .frame(maxWidth: 560)
                     .padding(.horizontal, 18)
                     .padding(.bottom, 24)
                 }

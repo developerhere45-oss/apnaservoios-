@@ -338,7 +338,13 @@ final class APIClient {
             request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         }
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw networkErrorMessage(for: error)
+        }
         guard let http = response as? HTTPURLResponse else {
             throw APIError.badResponse("Backend response invalid.")
         }
@@ -352,6 +358,20 @@ final class APIClient {
             throw APIError.badResponse("Backend returned empty response.")
         }
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func networkErrorMessage(for error: Error) -> APIError {
+        let code = (error as? URLError)?.code
+        switch code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return .badResponse("No internet connection. Check your network and try again.")
+        case .timedOut:
+            return .badResponse("The server is taking too long to respond. Please try again.")
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return .badResponse("Sign-in service is unavailable right now. Please try again shortly.")
+        default:
+            return .badResponse("Could not reach the service. Check your connection and try again.")
+        }
     }
 
     private func makeURL(baseURL: URL, path: String) throws -> URL {
