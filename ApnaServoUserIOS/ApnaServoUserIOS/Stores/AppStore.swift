@@ -109,6 +109,7 @@ final class UserAppStore: ObservableObject {
     private var notificationOpenObserver: NSObjectProtocol?
     private var pendingNotificationDeepLink: AppNotificationDeepLink?
     private let tokenKey = "user_api_token"
+    private let appleUserIDKey = "apple_user_identifier"
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
     private let supportTicketKey = "apnaservo_user_support_ticket_id"
     private var currentAppleNonce: String?
@@ -309,14 +310,20 @@ final class UserAppStore: ObservableObject {
                     )
                     let result = try await Auth.auth().signIn(with: firebaseCredential)
                     let token = try await result.user.getIDToken(forcingRefresh: true)
+                    // Apple sends this stable identifier on every authorization,
+                    // whereas name/email are commonly supplied only the first time.
+                    secureStore.set(credential.user, for: appleUserIDKey)
                     let appleName = PersonNameComponentsFormatter().string(from: credential.fullName ?? PersonNameComponents())
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     profile.name = appleName.isEmpty ? (result.user.displayName ?? "ApnaServo Customer") : appleName
                     profile.email = result.user.email ?? credential.email ?? ""
                     profile.phone = String((result.user.phoneNumber ?? "").filter(\.isNumber).suffix(10))
+                    guard profile.isValid else {
+                        throw APIError.badResponse("Apple did not provide an email for this account. Please sign in again and choose Share My Email.")
+                    }
                     secureStore.set(token, for: tokenKey)
                     authToken = token
-                    await syncUserProfile()
+                    try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: token)
                     startupLocationPhase = .idle
                     startupManualAddress = ""
                     isStartupManualEntry = false
@@ -326,6 +333,11 @@ final class UserAppStore: ObservableObject {
                     throw APIError.badResponse("Sign in with Apple is unavailable in this build.")
                     #endif
                 } catch {
+                    secureStore.set("", for: tokenKey)
+                    authToken = ""
+                    #if canImport(FirebaseAuth)
+                    try? Auth.auth().signOut()
+                    #endif
                     toastMessage = appleSignInErrorMessage(for: error)
                 }
             }
@@ -333,6 +345,9 @@ final class UserAppStore: ObservableObject {
     }
 
     private func appleSignInErrorMessage(for error: Error) -> String {
+        if let apiError = error as? APIError {
+            return apiError.errorDescription ?? "Could not complete Apple sign-in. Please try again."
+        }
         #if canImport(FirebaseAuth)
         let authError = AuthErrorCode(rawValue: (error as NSError).code)
         switch authError {
@@ -421,6 +436,7 @@ final class UserAppStore: ObservableObject {
                 reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
                 token: apiToken
             )
+            secureStore.set("", for: appleUserIDKey)
             logout()
             toastMessage = "Account deletion request submitted successfully."
             return true
