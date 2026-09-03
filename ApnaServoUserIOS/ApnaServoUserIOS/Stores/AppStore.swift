@@ -86,6 +86,7 @@ final class UserAppStore: ObservableObject {
     @Published var submittedRatings: [String: Int] = [:]
     @Published var selectedCommercialServiceTitle = "Commercial AC Service"
     @Published var selectedCommercialServiceId = "ac"
+    @Published private(set) var isCommercialBooking = false
     private var bookingRequestID = ""
     @Published var selectedCleaningType = "Home Cleaning"
     @Published var selectedLaundryServiceType = "Wash & Fold"
@@ -697,7 +698,7 @@ final class UserAppStore: ObservableObject {
         }
     }
 
-    private func openServiceUsingCurrentControl(_ service: ServiceItem) {
+    private func openServiceUsingCurrentControl(_ service: ServiceItem, commercial: Bool = false) {
         selectedService = service
         selectedServiceStatusMessage = ""
         if appControlMode == .highDemand {
@@ -725,7 +726,7 @@ final class UserAppStore: ObservableObject {
                 break
             }
         }
-        startBooking(service)
+        startBooking(service, commercial: commercial)
     }
 
     func showAllServices(category: String? = nil) {
@@ -735,8 +736,9 @@ final class UserAppStore: ObservableObject {
         navigate(.services)
     }
 
-    func startBooking(_ service: ServiceItem) {
+    func startBooking(_ service: ServiceItem, commercial: Bool = false) {
         selectedService = service
+        isCommercialBooking = commercial
         bookingLocationTask?.cancel()
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
@@ -904,6 +906,7 @@ final class UserAppStore: ObservableObject {
                     city: city,
                     fcmToken: notificationService.fcmToken,
                     requestID: requestID,
+                    commercial: isCommercialBooking,
                     token: apiToken
                 )
                 latestBooking = liveBooking
@@ -1301,7 +1304,44 @@ final class UserAppStore: ObservableObject {
     func openCommercialService(_ title: String, serviceId: String) {
         selectedCommercialServiceTitle = title
         selectedCommercialServiceId = serviceId
-        startBooking(ServiceCatalog.service(id: serviceId))
+        Task {
+            await refreshAppControl()
+            guard commercialControlAllowsBooking() else { return }
+            openServiceUsingCurrentControl(ServiceCatalog.service(id: serviceId), commercial: true)
+        }
+    }
+
+    func openCommercialServices() {
+        Task {
+            await refreshAppControl()
+            guard commercialControlAllowsBooking() else { return }
+            navigate(.commercial)
+        }
+    }
+
+    private func commercialControlAllowsBooking() -> Bool {
+        if appControlMode == .maintenance {
+            selectedServiceStatusMessage = "ApnaServo is currently under maintenance. Please try again after some time."
+            navigate(.servicePreparing)
+            return false
+        }
+        if appControlMode == .highDemand {
+            selectedServiceStatusMessage = "We are currently receiving a high number of commercial requests. Please try again after some time."
+            navigate(.serviceHighDemand)
+            return false
+        }
+        let rule = serviceRules["commercial"] ?? RemoteServiceRule()
+        guard rule.isActiveNow else { return true }
+        selectedServiceStatusMessage = rule.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch rule.status {
+        case .available:
+            return true
+        case .highDemand:
+            navigate(.serviceHighDemand)
+        case .preparing, .temporarilyUnavailable, .disabled:
+            navigate(.servicePreparing)
+        }
+        return false
     }
 
     private static func normalizedServiceKey(_ value: String) -> String {

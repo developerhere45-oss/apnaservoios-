@@ -143,7 +143,7 @@ final class APIClient {
         }
     }
 
-    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, city: String, fcmToken: String, requestID: String, token: String) async throws -> Booking {
+    func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, city: String, fcmToken: String, requestID: String, commercial: Bool, token: String) async throws -> Booking {
         let amount = service.price
         let body: [String: Any] = [
             "bookingCode": requestID,
@@ -164,7 +164,8 @@ final class APIClient {
             "userPhone": profile.phone,
             "phone": profile.phone,
             "userEmail": profile.email,
-            "userFcmToken": fcmToken
+            "userFcmToken": fcmToken,
+            "commercial": commercial
         ]
         let envelope: BookingEnvelope = try await request(path: "/bookings", method: "POST", token: token, body: body)
         guard let booking = envelope.booking else {

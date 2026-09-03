@@ -1282,7 +1282,7 @@ struct CommercialHomeCard: View {
 
     var body: some View {
         Button {
-            store.navigate(.commercial)
+            store.openCommercialServices()
         } label: {
             ZStack(alignment: .leading) {
                 AndroidAssetImage(name: "commercial_home_card", contentMode: .fill)
