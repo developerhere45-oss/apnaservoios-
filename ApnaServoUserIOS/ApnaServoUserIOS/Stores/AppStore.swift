@@ -1566,6 +1566,7 @@ final class UserAppStore: ObservableObject {
         isRefreshingBookings = true
         defer { isRefreshingBookings = false }
         do {
+            let previousStatuses = Dictionary(uniqueKeysWithValues: bookings.map { ($0.id, $0.status) })
             let liveBookings = try await api.fetchUserBookings(token: apiToken)
             // Keep a just-created local booking while a read replica catches up.
             var merged = liveBookings
@@ -1573,6 +1574,11 @@ final class UserAppStore: ObservableObject {
                 merged.append(cached)
             }
             bookings = merged.sorted { $0.createdAtMillis > $1.createdAtMillis }
+            for booking in liveBookings {
+                if let previous = previousStatuses[booking.id], previous != booking.status {
+                    recordBookingStatusNotification(booking, previousStatus: previous)
+                }
+            }
             if let current = latestBooking,
                let updated = liveBookings.first(where: { $0.id == current.id || $0.bookingCode == current.bookingCode }) {
                 latestBooking = updated
@@ -1589,9 +1595,14 @@ final class UserAppStore: ObservableObject {
         isRefreshingLatestBooking = true
         defer { isRefreshingLatestBooking = false }
         do {
+            let previousStatus = booking.status
             let live = try await api.getBooking(booking.id, token: apiToken)
             latestBooking = live
             upsertBooking(live)
+            if previousStatus != live.status {
+                recordBookingStatusNotification(live, previousStatus: previousStatus)
+                await refreshNotifications()
+            }
         } catch {
             await refreshBookings()
         }
@@ -1670,6 +1681,34 @@ final class UserAppStore: ObservableObject {
                 createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)
             ),
             at: 0
+        )
+    }
+
+    private func recordBookingStatusNotification(_ booking: Booking, previousStatus: String) {
+        guard previousStatus.lowercased() != booking.status.lowercased() else { return }
+        let copy: (String, String)?
+        switch booking.status.lowercased() {
+        case "accepted": copy = ("Partner assigned", "A service partner accepted \(booking.displayId).")
+        case "on_the_way": copy = ("Partner on the way", "Your partner is travelling to your service location.")
+        case "arrived": copy = ("Partner arrived", "Your service partner has arrived at your location.")
+        case "started": copy = ("Service started", "Work has started for \(booking.displayId).")
+        case "amount_pending": copy = ("Price approval required", "Your partner submitted the final service amount.")
+        case "completed": copy = ("Booking completed", "Service for \(booking.displayId) is complete.")
+        case "cancelled": copy = ("Booking cancelled", "\(booking.displayId) was cancelled.")
+        default: copy = nil
+        }
+        guard let copy else { return }
+        let alreadyPresent = notifications.contains {
+            $0.bookingId == booking.id && $0.title == copy.0 && $0.body == copy.1
+        }
+        if !alreadyPresent {
+            addNotification(title: copy.0, body: copy.1, type: "booking:status_update", bookingId: booking.id)
+        }
+        notificationService.presentBookingStatus(
+            title: copy.0,
+            body: copy.1,
+            bookingId: booking.id,
+            status: booking.status
         )
     }
 

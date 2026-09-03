@@ -82,7 +82,20 @@ final class APIClient {
     }
 
     func saveFCMToken(_ fcmToken: String, token: String) async throws {
-        let _: EmptyResponse = try await request(path: "/users/fcm-token", method: "POST", token: token, body: ["fcmToken": fcmToken])
+        let deviceID = await MainActor.run {
+            UIDevice.current.identifierForVendor?.uuidString ?? "ios-user-device"
+        }
+        let _: EmptyResponse = try await request(
+            path: "/users/fcm-token",
+            method: "POST",
+            token: token,
+            body: [
+                "fcmToken": fcmToken,
+                "platform": "ios",
+                "deviceId": deviceID,
+                "appType": "user"
+            ]
+        )
     }
 
     func requestAccountDeletion(reason: String, token: String) async throws {
@@ -614,6 +627,24 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     func consumePendingDeepLink() -> AppNotificationDeepLink? {
         defer { pendingDeepLink = nil }
         return pendingDeepLink
+    }
+
+    func presentBookingStatus(title: String, body: String, bookingId: String, status: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.categoryIdentifier = "BOOKING_UPDATE"
+        content.userInfo = [
+            "type": "booking:status_update",
+            "status": status,
+            "bookingId": bookingId,
+            "actionType": "OPEN_BOOKING"
+        ]
+        let identifier = "booking-status-\(bookingId)-\(status)"
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        )
     }
 }
 
