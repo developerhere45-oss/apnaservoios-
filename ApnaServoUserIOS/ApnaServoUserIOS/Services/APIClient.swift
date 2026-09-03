@@ -283,6 +283,13 @@ final class APIClient {
         let _: EmptyResponse? = try? await request(path: "/bookings/\(bookingId)/chat/seen", method: "PATCH", token: token, body: [:])
     }
 
+    func fetchCustomerAppControl() async throws -> CustomerAppControlEnvelope {
+        try await publicRequest(
+            path: "/app-control/config?app=customer&platform=ios&audience=users",
+            method: "GET"
+        )
+    }
+
     private func request<T: Decodable>(
         path: String,
         method: String = "GET",
@@ -522,10 +529,6 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
         } catch {
             return false
         }
-    }
-
-    func fetchCustomerAppControl() async throws -> CustomerAppControlEnvelope {
-        try await publicRequest(path: "/app-control/config?app=customer&platform=ios&audience=users", method: "GET")
     }
 
     func requestPermissionIfNeeded() async -> Bool {
