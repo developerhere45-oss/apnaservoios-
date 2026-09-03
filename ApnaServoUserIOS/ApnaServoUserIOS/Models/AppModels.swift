@@ -536,6 +536,8 @@ struct SupportTicketSyncResponse: Decodable {
 struct SupportTicketEnvelope: Decodable {
     let ticketId: String
     let status: String
+    let assignedTo: String?
+    let bookingCode: String?
     let messages: [ChatMessage]
 }
 

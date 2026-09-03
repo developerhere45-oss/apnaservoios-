@@ -96,9 +96,8 @@ final class APIClient {
         return user
     }
 
-    func sendSupportTicketMessage(ticketId: String, clientMessageId: String, message: String, token: String) async throws -> SupportTicketSyncResponse {
-        let body: [String: Any] = [
-            "ticketId": ticketId,
+    func sendSupportTicketMessage(ticketId: String, clientMessageId: String, message: String, booking: Booking?, token: String) async throws -> SupportTicketSyncResponse {
+        var body: [String: Any] = [
             "clientMessageId": clientMessageId,
             "senderRole": "user",
             "senderName": "Customer",
@@ -107,6 +106,11 @@ final class APIClient {
             "priority": "normal",
             "source": "ios_user_app"
         ]
+        if !ticketId.isEmpty { body["ticketId"] = ticketId }
+        if let booking {
+            body["bookingId"] = booking.id
+            body["bookingCode"] = booking.bookingCode
+        }
         return try await request(path: "/users/support-tickets/sync", method: "POST", token: token, body: body)
     }
 

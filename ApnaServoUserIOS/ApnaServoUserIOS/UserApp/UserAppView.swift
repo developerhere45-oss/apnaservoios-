@@ -3541,7 +3541,27 @@ struct SupportChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar(title: "Support Chat", subtitle: "24x7 help", backAction: { store.selectTab(.profile) })
+            TopBar(title: "Support Chat", subtitle: supportSubtitle, backAction: { store.selectTab(.profile) })
+            if !store.supportTicketId.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "ticket.fill").foregroundStyle(AppTheme.rose)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ticket \(store.supportTicketId)")
+                            .font(.system(size: 12, weight: .black))
+                        Text(ticketDetail)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    Spacer()
+                    Text(store.supportTicketStatus.replacingOccurrences(of: "_", with: " ").uppercased())
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(AppTheme.rose)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 56)
+                .background(Color.white)
+                .overlay(alignment: .bottom) { Divider() }
+            }
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 10) {
@@ -3564,7 +3584,7 @@ struct SupportChatScreen: View {
             .task {
                 await store.loadSupportChat()
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 10_000_000_000)
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
                     guard !Task.isCancelled else { break }
                     await store.loadSupportChat(showError: false)
                 }
@@ -3574,6 +3594,16 @@ struct SupportChatScreen: View {
                 text = ""
             }
         }
+    }
+
+    private var supportSubtitle: String {
+        store.supportAssignedAgent.isEmpty ? "24x7 help • Waiting for agent" : "Connected with \(store.supportAssignedAgent)"
+    }
+
+    private var ticketDetail: String {
+        var parts = [store.supportAssignedAgent.isEmpty ? "Unassigned" : "Agent: \(store.supportAssignedAgent)"]
+        if !store.supportBookingCode.isEmpty { parts.append("Booking: \(store.supportBookingCode)") }
+        return parts.joined(separator: " • ")
     }
 }
 

@@ -50,6 +50,11 @@ final class UserAppStore: ObservableObject {
     @Published var supportMessages: [ChatMessage] = [
         ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
     ]
+    @Published private(set) var supportTicketId = ""
+    @Published private(set) var supportTicketStatus = ""
+    @Published private(set) var supportAssignedAgent = ""
+    @Published private(set) var supportBookingCode = ""
+    @Published private(set) var isSupportMessageSending = false
     @Published var notifications: [AppNotificationItem] = []
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
@@ -1156,7 +1161,7 @@ final class UserAppStore: ObservableObject {
 
     func sendSupportMessage(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty, isLoggedIn else {
+        guard !clean.isEmpty, isLoggedIn, !isSupportMessageSending else {
             toastMessage = "Please sign in to contact support."
             return
         }
@@ -1165,13 +1170,22 @@ final class UserAppStore: ObservableObject {
         if let saved = defaults.string(forKey: supportTicketKey), !saved.isEmpty {
             ticketId = saved
         } else {
-            ticketId = "ios-\(UUID().uuidString)"
-            defaults.set(ticketId, forKey: supportTicketKey)
+            ticketId = ""
         }
+        isSupportMessageSending = true
         supportMessages.append(ChatMessage(id: clientMessageId, bookingId: "support", bookingCode: "", senderRole: "user", senderName: "You", message: clean, clientMessageId: clientMessageId, deliveryStatus: "sending", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
         Task {
             do {
-                let ticket = try await api.sendSupportTicketMessage(ticketId: ticketId, clientMessageId: clientMessageId, message: clean, token: apiToken)
+                let ticket = try await api.sendSupportTicketMessage(
+                    ticketId: ticketId,
+                    clientMessageId: clientMessageId,
+                    message: clean,
+                    booking: latestBooking,
+                    token: apiToken
+                )
+                defaults.set(ticket.ticketId, forKey: supportTicketKey)
+                supportTicketId = ticket.ticketId
+                supportTicketStatus = ticket.status
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "sent"
                 }
@@ -1183,6 +1197,7 @@ final class UserAppStore: ObservableObject {
                 }
                 toastMessage = error.localizedDescription
             }
+            isSupportMessageSending = false
         }
     }
 
@@ -1308,6 +1323,11 @@ final class UserAppStore: ObservableObject {
               !ticketId.isEmpty else { return }
         do {
             let ticket = try await api.fetchSupportTicket(ticketId: ticketId, token: apiToken)
+            defaults.set(ticket.ticketId, forKey: supportTicketKey)
+            supportTicketId = ticket.ticketId
+            supportTicketStatus = ticket.status
+            supportAssignedAgent = ticket.assignedTo ?? ""
+            supportBookingCode = ticket.bookingCode ?? ""
             let pending = supportMessages.filter { $0.senderRole == "user" && ["sending", "failed"].contains($0.deliveryStatus) }
             var merged = ticket.messages
             for local in pending where !merged.contains(where: {
@@ -1341,6 +1361,14 @@ final class UserAppStore: ObservableObject {
         isStartupManualEntry = false
         latestBooking = nil
         bookings = []
+        supportMessages = [
+            ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        ]
+        supportTicketId = ""
+        supportTicketStatus = ""
+        supportAssignedAgent = ""
+        supportBookingCode = ""
+        isSupportMessageSending = false
         submittedRatings = [:]
         defaults.removeObject(forKey: submittedRatingsKey)
         defaults.removeObject(forKey: supportTicketKey)
