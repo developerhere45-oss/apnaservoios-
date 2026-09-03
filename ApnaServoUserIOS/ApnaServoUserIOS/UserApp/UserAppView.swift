@@ -25,7 +25,7 @@ struct UserAppView: View {
         }
         .background(AppTheme.bg)
         .foregroundStyle(AppTheme.ink)
-        .tint(AppTheme.loginRose)
+        .tint(store.remotePrimaryColor)
     }
 
     private var showsBottomNav: Bool {
@@ -276,7 +276,7 @@ struct LoginScreen: View {
                         safeCard(title: "Your home is in safe hands.", subtitle: "Secure  •  Trusted  •  Professional")
                     }
                     .padding(18)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .shadow(color: .black.opacity(0.08), radius: 16, y: 7)
                     .frame(maxWidth: 560)
                     .padding(.horizontal, 18)
@@ -298,7 +298,7 @@ struct LoginScreen: View {
             trustItem("Quick & Reliable", "Support", icon: "headphones")
         }
         .padding(.vertical, 14)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.08), radius: 12, y: 5)
         .padding(.horizontal, 18)
     }
@@ -357,8 +357,9 @@ struct LoginScreen: View {
 
 struct OTPVerificationScreen: View {
     @EnvironmentObject private var store: UserAppStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var otp = ""
-    @State private var secondsRemaining = 0
+    @State private var now = Date()
     @FocusState private var otpFocused: Bool
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -398,7 +399,11 @@ struct OTPVerificationScreen: View {
                             .focused($otpFocused)
                             .opacity(0.01)
                             .frame(width: 1, height: 1)
-                            .onChange(of: otp) { value in otp = String(value.filter(\.isNumber).prefix(6)) }
+                            .onChange(of: otp) { value in
+                                let sanitized = String(value.filter(\.isNumber).prefix(6))
+                                if sanitized != value { otp = sanitized; return }
+                                if sanitized.count == 6, !store.isAuthenticating { Task { await verifyOTP() } }
+                            }
                     }
 
                 Label("Enter the 6-digit code sent to your number", systemImage: "checkmark.shield")
@@ -416,11 +421,11 @@ struct OTPVerificationScreen: View {
                     Button("Resend OTP") {
                         Task { await resendOTP() }
                     }
-                        .disabled(secondsRemaining > 0)
-                        .foregroundStyle(secondsRemaining > 0 ? AppTheme.muted : AppTheme.loginRose)
+                        .disabled(secondsRemaining > 0 || store.isAuthenticating)
+                        .foregroundStyle(secondsRemaining > 0 || store.isAuthenticating ? AppTheme.muted : AppTheme.loginRose)
                 }
                 .padding(16)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.line))
 
                 Text(secondsRemaining > 0 ? "Resend OTP in  00:\(String(format: "%02d", secondsRemaining))" : "You can resend the OTP now")
@@ -439,8 +444,8 @@ struct OTPVerificationScreen: View {
                     .roseCTA()
                 }
                 .buttonStyle(.plain)
-                .disabled(otp.count != 6 || store.isAuthenticating)
-                .opacity(otp.count == 6 && !store.isAuthenticating ? 1 : 0.65)
+                .disabled(otp.count != 6 || secondsRemaining == 0 || store.isAuthenticating)
+                .opacity(otp.count == 6 && secondsRemaining > 0 && !store.isAuthenticating ? 1 : 0.65)
 
                 safeCard(title: "Your data is protected.", subtitle: "We use your details only to provide and support your requested service.")
             }
@@ -449,10 +454,11 @@ struct OTPVerificationScreen: View {
         }
         .background(AppTheme.loginBg.ignoresSafeArea())
         .onAppear {
-            secondsRemaining = store.loginOTPExpiresInSeconds
+            now = Date()
             otpFocused = true
         }
-        .onReceive(timer) { _ in if secondsRemaining > 0 { secondsRemaining -= 1 } }
+        .onReceive(timer) { _ in now = Date() }
+        .onChange(of: scenePhase) { phase in if phase == .active { now = Date() } }
     }
 
     private var otpBoxes: some View {
@@ -463,7 +469,7 @@ struct OTPVerificationScreen: View {
                     .foregroundStyle(index < otp.count ? AppTheme.loginRose : AppTheme.muted)
                     .frame(maxWidth: .infinity)
                     .frame(height: 68)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(index == otp.count ? AppTheme.loginRose : AppTheme.loginRose.opacity(0.25), lineWidth: 1.5))
             }
         }
@@ -472,7 +478,7 @@ struct OTPVerificationScreen: View {
     private func resendOTP() async {
         guard await store.resendLoginOTP() else { return }
         otp = ""
-        secondsRemaining = store.loginOTPExpiresInSeconds
+        now = Date()
         otpFocused = true
         store.toastMessage = "A new OTP has been sent."
     }
@@ -480,6 +486,11 @@ struct OTPVerificationScreen: View {
     private func verifyOTP() async {
         guard otp.count == 6 else { return }
         _ = await store.verifyLoginOTP(otp)
+    }
+
+    private var secondsRemaining: Int {
+        guard let expiresAt = store.loginOTPExpiresAt else { return 0 }
+        return max(0, Int(ceil(expiresAt.timeIntervalSince(now))))
     }
 }
 
@@ -489,7 +500,7 @@ private func safeCard(title: String, subtitle: String) -> some View {
             .font(.system(size: 28))
             .foregroundStyle(AppTheme.loginRose)
             .frame(width: 52, height: 52)
-            .background(Color.white.opacity(0.8), in: Circle())
+            .background(AppTheme.surface.opacity(0.8), in: Circle())
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.loginRose)
             Text(subtitle).font(.system(size: 12)).foregroundStyle(AppTheme.muted)
@@ -670,7 +681,7 @@ struct StartupLocationGateScreen: View {
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(primary ? AppTheme.rose : Color.white, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .background(primary ? AppTheme.rose : AppTheme.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 15, style: .continuous)
                         .stroke(primary ? AppTheme.rose : Color(hex: 0xE8D5D5), lineWidth: 1)
@@ -794,11 +805,12 @@ struct HomeScreen: View {
                         )
                         .frame(width: proxy.size.width)
                         VStack(spacing: 18) {
-                            QuickServiceStrip()
-                            CommercialHomeCard()
-                            ServiceGridSection(title: "Popular Services", services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"]))
-                            ServiceGridSection(title: "More Services", services: homeServices(["roadside", "painting", "interior", "ro", "pest", "appliances"]))
-                            WhyChooseCard()
+                            if store.isHomeSectionVisible("announcements") { RemoteContentStrip(items: store.remoteAnnouncements, kind: "announcement") }
+                            if store.isHomeSectionVisible("quick_services") { QuickServiceStrip() }
+                            if store.isHomeSectionVisible("commercial") { CommercialHomeCard() }
+                            if store.isHomeSectionVisible("popular_services") { ServiceGridSection(title: store.homeSectionTitle("popular_services", fallback: "Popular Services"), services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"])) }
+                            if store.isHomeSectionVisible("more_services") { ServiceGridSection(title: store.homeSectionTitle("more_services", fallback: "More Services"), services: homeServices(["roadside", "painting", "interior", "ro", "pest", "appliances"])) }
+                            if store.isHomeSectionVisible("feature_strip") { WhyChooseCard() }
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 12)
@@ -823,9 +835,7 @@ struct HomeScreen: View {
     }
 
     private func homeServices(_ ids: [String]) -> [ServiceItem] {
-        ids.map { id in
-            store.services.first(where: { $0.id == id }) ?? ServiceCatalog.service(id: id)
-        }
+        ids.compactMap { id in store.services.first(where: { $0.id == id }) }
     }
 
     private var physicalScreenHeight: CGFloat {
@@ -859,6 +869,47 @@ private struct OutsideServiceAreaBanner: View {
     }
 }
 
+/// Content published from Admin → Control Center. The app deliberately accepts
+/// only title, message, image and a known service action, never executable UI.
+private struct RemoteContentStrip: View {
+    @EnvironmentObject private var store: UserAppStore
+    let items: [RemoteAppContent]
+    let kind: String
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(items) { item in
+                    Button {
+                        guard !item.serviceCategory.isEmpty else { return }
+                        let service = store.services.first(where: { $0.id == item.serviceCategory }) ?? ServiceCatalog.service(id: item.serviceCategory)
+                        store.openService(service)
+                    } label: {
+                        HStack(spacing: 12) {
+                            if let url = URL(string: item.imageUrl), !item.imageUrl.isEmpty {
+                                AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { ProgressView() }
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.ink)
+                                if !item.message.isEmpty { Text(item.message).font(.system(size: 12)).foregroundStyle(AppTheme.muted).lineLimit(2) }
+                            }
+                            Spacer(minLength: 0)
+                            if !item.ctaText.isEmpty { Text(item.ctaText).font(.system(size: 12, weight: .bold)).foregroundStyle(store.remotePrimaryColor) }
+                        }
+                        .padding(12)
+                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(item.serviceCategory.isEmpty)
+                }
+            }
+        }
+    }
+}
+
 struct HomeHero: View {
     @EnvironmentObject private var store: UserAppStore
     @Environment(\.scenePhase) private var scenePhase
@@ -867,7 +918,13 @@ struct HomeHero: View {
     @Binding var showSearch: Bool
     let height: CGFloat
 
-    private let slides = HomeHeroSlide.androidSlides
+    private var slides: [HomeHeroSlide] {
+        let remote = store.remoteBanners.compactMap { banner -> HomeHeroSlide? in
+            guard !banner.title.isEmpty || !banner.message.isEmpty else { return nil }
+            return HomeHeroSlide(id: banner.serviceCategory, asset: "", title: banner.title, subtitle: banner.message, imageURL: banner.imageUrl, style: banner.bannerStyle)
+        }
+        return remote.isEmpty ? HomeHeroSlide.androidSlides : remote
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -875,7 +932,7 @@ struct HomeHero: View {
                 ForEach(slides.indices, id: \.self) { index in
                     let slide = slides[index]
                     HomeHeroSlideView(slide: slide, height: height) {
-                        store.openService(ServiceCatalog.service(id: slide.id))
+                        if !slide.id.isEmpty { store.openService(store.services.first(where: { $0.id == slide.id }) ?? ServiceCatalog.service(id: slide.id)) }
                     }
                     .tag(index)
                 }
@@ -891,9 +948,15 @@ struct HomeHero: View {
                     VStack(spacing: 0) {
                         AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
                             .frame(width: 164, height: 52)
-                        Text("Home services at your doorstep")
+                        Text(store.remoteHomeSubtitle.isEmpty ? "Home services at your doorstep" : store.remoteHomeSubtitle)
                             .font(.system(size: 11))
                             .foregroundStyle(Color(hex: 0x363231))
+                        if !store.remoteHomeTitle.isEmpty {
+                            Text(store.remoteHomeTitle)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(store.remotePrimaryColor)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer()
                     AndroidAssetImage(name: "ic_assam_jaapi", contentMode: .fit)
@@ -970,6 +1033,8 @@ private struct HomeHeroSlide: Identifiable {
     let asset: String
     let title: String
     let subtitle: String
+    var imageURL: String = ""
+    var style: RemoteBannerStyle? = nil
 
     static let androidSlides = [
         HomeHeroSlide(id: "ro", asset: "hero_ro_background", title: "RO SERVICE", subtitle: "Filter • Leakage • Installation"),
@@ -993,11 +1058,16 @@ private struct HomeHeroSlideView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottomLeading) {
-                AndroidAssetImage(name: slide.asset, contentMode: .fill)
-                    .frame(width: proxy.size.width, height: height)
-                    .clipped()
+                Color(hexString: slide.style?.backgroundColor ?? "#161616")
+                if let url = URL(string: slide.imageURL), !slide.imageURL.isEmpty {
+                    AsyncImage(url: url) { image in image.resizable().aspectRatio(contentMode: .fill) } placeholder: { AndroidAssetImage(name: slide.asset, contentMode: .fill) }
+                        .frame(width: proxy.size.width, height: height).clipped()
+                } else {
+                    AndroidAssetImage(name: slide.asset, contentMode: .fill)
+                        .frame(width: proxy.size.width, height: height).clipped()
+                }
                 LinearGradient(
-                    colors: [Color(hex: 0xFFF8F4).opacity(0.98), Color(hex: 0xFFF8F4).opacity(0.76), .clear],
+                    colors: [Color(hexString: slide.style?.overlayColor ?? "#FFF8F4").opacity(slide.style?.overlayOpacity ?? 0.76), Color(hexString: slide.style?.overlayColor ?? "#FFF8F4").opacity((slide.style?.overlayOpacity ?? 0.76) * 0.65), .clear],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -1008,22 +1078,22 @@ private struct HomeHeroSlideView: View {
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(AppTheme.rose)
                     Text(slide.title)
-                        .font(.system(size: titleSize, weight: .black))
-                        .foregroundStyle(AppTheme.ink)
+                        .font(.system(size: titleSize, weight: titleWeight, design: titleDesign))
+                        .foregroundStyle(Color(hexString: slide.style?.titleColor ?? "#161616"))
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
                     Text(slide.subtitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink.opacity(0.78))
+                        .font(.system(size: CGFloat(slide.style?.messageSize ?? 12), weight: .semibold, design: titleDesign))
+                        .foregroundStyle(Color(hexString: slide.style?.messageColor ?? "#161616").opacity(0.86))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Button(action: bookAction) {
                         Text("Book Now ›")
                             .font(.system(size: 12, weight: .black))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(hexString: slide.style?.ctaTextColor ?? "#ffffff"))
                             .frame(width: 112, height: 34)
-                            .background(Color(hex: 0x11141A), in: Capsule())
+                            .background(Color(hexString: slide.style?.ctaBackgroundColor ?? "#11141A"), in: Capsule())
                             .overlay(Capsule().stroke(AppTheme.rose, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
@@ -1037,9 +1107,28 @@ private struct HomeHeroSlideView: View {
     }
 
     private var titleSize: CGFloat {
+        if let value = slide.style?.titleSize { return CGFloat(value) }
         if slide.title.count >= 10 { return 24 }
         if slide.title.count >= 8 { return 26 }
         return 28
+    }
+
+    private var titleDesign: Font.Design {
+        switch slide.style?.titleFont {
+        case "rounded": return .rounded
+        case "serif": return .serif
+        case "monospaced": return .monospaced
+        default: return .default
+        }
+    }
+
+    private var titleWeight: Font.Weight {
+        switch slide.style?.titleWeight {
+        case "regular": return .regular
+        case "semibold": return .semibold
+        case "bold": return .bold
+        default: return .heavy
+        }
     }
 }
 
@@ -1250,10 +1339,10 @@ struct QuickServiceStrip: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(quickIds, id: \.self) { id in
-                let service = ServiceCatalog.service(id: id)
-                Button {
-                    store.openService(service)
-                } label: {
+                if let service = store.services.first(where: { $0.id == id }) {
+                    Button {
+                        store.openService(service)
+                    } label: {
                     VStack(spacing: 7) {
                         ServiceLogo(service: service, size: 52)
                         Text(service.id == "appliances" ? "Appliance" : service.name.components(separatedBy: " ").first ?? service.name)
@@ -1264,15 +1353,16 @@ struct QuickServiceStrip: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 104)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0xEED5D3), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                }
             }
         }
         .padding(6)
         .frame(height: 116)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.06), radius: 5, y: 3)
     }
 }
@@ -1289,7 +1379,7 @@ struct CommercialHomeCard: View {
                     .frame(height: 166)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                LinearGradient(colors: [Color.white.opacity(0.94), Color.white.opacity(0.7), .clear], startPoint: .leading, endPoint: .trailing)
+                LinearGradient(colors: [AppTheme.surface.opacity(0.94), AppTheme.surface.opacity(0.7), .clear], startPoint: .leading, endPoint: .trailing)
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 10) {
                         Image(systemName: "building.2.fill")
@@ -1535,7 +1625,7 @@ struct CategoryRailButton: View {
         if store.activeCategory == category {
             LinearGradient(colors: [AppTheme.rose, AppTheme.booking], startPoint: .topLeading, endPoint: .bottomTrailing)
         } else {
-            Color.white
+            AppTheme.surface
         }
     }
 }
@@ -1558,6 +1648,12 @@ struct ServiceListCard: View {
                     Text("\(service.arrival) booking • Verified expert")
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.muted)
+                    if !store.serviceIsBookable(service) {
+                        Text(store.serviceUnavailableMessage(for: service))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    }
                 }
                 Spacer(minLength: 4)
                 Text("Book  ›")
@@ -1604,7 +1700,7 @@ struct ServicePreparingScreen: View {
                 Spacer(minLength: 0)
             }
             .padding(18)
-            .background(Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(AppTheme.surface.opacity(0.74), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.loginRose.opacity(0.14)))
             .shadow(color: AppTheme.loginRose.opacity(0.08), radius: 14, y: 7)
             .padding(.horizontal, 28)
@@ -1645,7 +1741,7 @@ struct ServicePreparingScreen: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .background(Color.white)
+        .background(AppTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
@@ -1986,7 +2082,7 @@ struct CleaningBookingOptionsCard: View {
                         .padding(8)
                         .frame(maxWidth: .infinity)
                         .background(
-                            store.selectedCleaningType == type ? AppTheme.bookingSoft : Color.white,
+                            store.selectedCleaningType == type ? AppTheme.bookingSoft : AppTheme.surface,
                             in: RoundedRectangle(cornerRadius: 14)
                         )
                         .overlay(
@@ -2032,7 +2128,7 @@ struct LaundryBookingOptionsCard: View {
                             .foregroundStyle(store.selectedLaundryServiceType == type ? AppTheme.booking : AppTheme.ink)
                             .frame(maxWidth: .infinity, minHeight: 46)
                             .background(
-                                store.selectedLaundryServiceType == type ? AppTheme.bookingSoft : Color.white,
+                                store.selectedLaundryServiceType == type ? AppTheme.bookingSoft : AppTheme.surface,
                                 in: RoundedRectangle(cornerRadius: 12)
                             )
                             .overlay(
@@ -2115,7 +2211,7 @@ struct LaundryBookingOptionsCard: View {
         }
         .padding(7)
         .frame(maxWidth: .infinity)
-        .background(count > 0 ? AppTheme.bookingSoft : Color.white, in: RoundedRectangle(cornerRadius: 11))
+        .background(count > 0 ? AppTheme.bookingSoft : AppTheme.surface, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11).stroke(count > 0 ? AppTheme.booking : AppTheme.line, lineWidth: 1))
     }
 
@@ -2528,7 +2624,7 @@ private struct BookingConfirmationSplash: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 620)
-        .background(Color.white)
+        .background(AppTheme.surface)
     }
 }
 
@@ -2543,7 +2639,7 @@ private struct BookingFlowTopBar: View {
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(AppTheme.booking)
                     .frame(width: 44, height: 44)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 15))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 15))
                     .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -2564,7 +2660,7 @@ private struct BookingFlowTopBar: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.booking)
                     .frame(width: 44, height: 44)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 15))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 15))
                     .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.line, lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -2717,7 +2813,7 @@ private struct ActiveBookingPage: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.booking)
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -3082,7 +3178,7 @@ private struct CounterOfferSheet: View {
             Spacer()
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppTheme.surface)
     }
 }
 
@@ -3103,7 +3199,7 @@ private struct PaymentVerificationPage: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppTheme.booking)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.line, lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -3147,7 +3243,7 @@ private struct PaymentVerifiedPage: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(store.submittedRatings[booking.id] == nil ? AppTheme.booking : AppTheme.green)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(store.submittedRatings[booking.id] == nil ? AppTheme.booking.opacity(0.5) : AppTheme.green.opacity(0.5), lineWidth: 1))
                 .disabled(rating == 0 || store.bookingActionInFlight || store.submittedRatings[booking.id] != nil)
             }
@@ -3209,7 +3305,7 @@ private extension View {
     func flowPanel() -> some View {
         self
             .padding(16)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.line, lineWidth: 1))
             .shadow(color: Color.black.opacity(0.04), radius: 7, y: 3)
     }
@@ -3233,7 +3329,7 @@ struct BookingsListScreen: View {
         VStack(spacing: 0) {
             TopBar(title: "My Bookings", subtitle: "\(store.bookings.count) total", backAction: { store.selectTab(.home) })
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 14) {
                     bookingsSummary
                     filterBar
                     if filteredBookings.isEmpty {
@@ -3247,6 +3343,7 @@ struct BookingsListScreen: View {
                 .padding(18)
                 .padding(.bottom, 114)
             }
+            .refreshable { await store.refreshBookings() }
         }
         .task {
             await store.refreshBookings()
@@ -3284,7 +3381,7 @@ struct BookingsListScreen: View {
                     .foregroundStyle(filter == value ? .white : AppTheme.ink)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 9)
-                    .background(filter == value ? AppTheme.booking : Color.white, in: Capsule())
+                    .background(filter == value ? AppTheme.booking : AppTheme.surface, in: Capsule())
                     .overlay(Capsule().stroke(filter == value ? AppTheme.booking : AppTheme.line, lineWidth: 1))
                 }
             }
@@ -3354,7 +3451,7 @@ struct NotificationsScreen: View {
                 store.markAllNotificationsRead()
             }
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 12) {
+                LazyVStack(spacing: 12) {
                     if store.notifications.isEmpty {
                         EmptyState(title: "No messages", subtitle: "Booking alerts and partner updates will appear here.")
                     } else {
@@ -3366,7 +3463,9 @@ struct NotificationsScreen: View {
                 .padding(18)
                 .padding(.bottom, 112)
             }
+            .refreshable { await store.refreshNotifications() }
         }
+        .task { await store.refreshNotifications() }
     }
 }
 
@@ -3821,7 +3920,7 @@ struct FormField: View {
             .font(.system(size: 14, weight: .semibold))
             .padding(.horizontal, 14)
             .frame(height: 50)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
     }
 }
@@ -3878,7 +3977,7 @@ struct FloatingBookingFooter: View {
                 }
             }
             .padding(10)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 22))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(AppTheme.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
         }

@@ -2,26 +2,40 @@ import SwiftUI
 import UIKit
 
 enum AppTheme {
-    static let bg = Color(hex: 0xFFF8F4)
-    static let loginBg = Color(hex: 0xFFF8F7)
-    static let ink = Color(hex: 0x161616)
-    static let muted = Color(hex: 0x605B58)
-    static let line = Color(hex: 0xEEE1DD)
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(UIColor { traits in
+            let value: UInt32 = traits.userInterfaceStyle == .dark ? dark : light
+            UIColor(
+                red: CGFloat((value >> 16) & 0xff) / 255,
+                green: CGFloat((value >> 8) & 0xff) / 255,
+                blue: CGFloat(value & 0xff) / 255,
+                alpha: 1
+            )
+        })
+    }
+
+    static let bg = adaptive(light: 0xFFF8F4, dark: 0x121212)
+    static let loginBg = adaptive(light: 0xFFF8F7, dark: 0x121216)
+    static let surface = adaptive(light: 0xFFFFFF, dark: 0x1D1D22)
+    static let ink = adaptive(light: 0x161616, dark: 0xF5F2F4)
+    static let muted = adaptive(light: 0x605B58, dark: 0xC7C1C5)
+    static let line = adaptive(light: 0xEEE1DD, dark: 0x39343A)
+    static let subtle = adaptive(light: 0xF5F1F2, dark: 0x2A272D)
     static let rose = Color(hex: 0xD9898D)
     static let roseDark = Color(hex: 0x171717)
-    static let roseSoft = Color(hex: 0xF8E1E1)
+    static let roseSoft = adaptive(light: 0xF8E1E1, dark: 0x42222B)
     static let loginRose = Color(hex: 0xE12A53)
     static let loginRoseDark = Color(hex: 0xC01541)
     static let booking = Color(hex: 0xFF3F5F)
     static let bookingDark = Color(hex: 0x7E0012)
-    static let bookingSoft = Color(hex: 0xFFEEF2)
+    static let bookingSoft = adaptive(light: 0xFFEEF2, dark: 0x48202C)
     static let green = Color(hex: 0x16B16F)
-    static let greenSoft = Color(hex: 0xE8FAF2)
+    static let greenSoft = adaptive(light: 0xE8FAF2, dark: 0x173B2B)
     static let blue = Color(hex: 0x2D7ADA)
     static let purple = Color(hex: 0x7E58D2)
     static let orange = Color(hex: 0xFF662E)
     static let premier = Color(hex: 0xAA7479)
-    static let premierSoft = Color(hex: 0xF9E4E4)
+    static let premierSoft = adaptive(light: 0xF9E4E4, dark: 0x422A30)
 }
 
 extension Color {
@@ -34,17 +48,33 @@ extension Color {
             opacity: alpha
         )
     }
+
+    init(hexString: String) {
+        let cleaned = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "#", with: "")
+        let value = UInt32(cleaned, radix: 16) ?? 0xF32368
+        self.init(hex: value)
+    }
 }
 
 enum AndroidAsset {
+    private static let imageCache = NSCache<NSString, UIImage>()
+
     static func image(_ name: String) -> UIImage? {
+        let key = name as NSString
+        if let cached = imageCache.object(forKey: key) { return cached }
         for fileExtension in ["png", "jpg", "jpeg"] {
             if let url = Bundle.main.url(forResource: name, withExtension: fileExtension, subdirectory: "ImportedAndroidAssets"),
                let image = UIImage(contentsOfFile: url.path) {
+                imageCache.setObject(image, forKey: key)
                 return image
             }
         }
-        return UIImage(named: name)
+        if let image = UIImage(named: name) {
+            imageCache.setObject(image, forKey: key)
+            return image
+        }
+        return nil
     }
 }
 
@@ -60,7 +90,7 @@ struct AndroidAssetImage: View {
                     .aspectRatio(contentMode: contentMode)
             } else {
                 ZStack {
-                    LinearGradient(colors: [AppTheme.roseSoft, .white], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [AppTheme.roseSoft, AppTheme.surface], startPoint: .topLeading, endPoint: .bottomTrailing)
                     Text(name.prefix(2).uppercased())
                         .font(.headline.weight(.black))
                         .foregroundStyle(AppTheme.rose)
@@ -74,7 +104,7 @@ extension View {
     func androidCard(padding: CGFloat = 16, radius: CGFloat = 14, border: Color = AppTheme.line, shadow: CGFloat = 2) -> some View {
         self
             .padding(padding)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(border, lineWidth: 1))
             .shadow(color: .black.opacity(shadow > 4 ? 0.13 : 0.055), radius: shadow, y: shadow > 4 ? 4 : 2)
     }
@@ -112,7 +142,7 @@ extension View {
             .foregroundStyle(AppTheme.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppTheme.line, lineWidth: 1))
     }
 }
@@ -133,7 +163,7 @@ struct TopBar: View {
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppTheme.rose)
                         .frame(width: 44, height: 44)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
                 }
             }
@@ -161,7 +191,7 @@ struct TopBar: View {
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(AppTheme.rose)
                             .frame(width: 42, height: 42)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
                     }
                 } else if !trailingTitle.isEmpty {
@@ -170,7 +200,7 @@ struct TopBar: View {
                         .foregroundStyle(AppTheme.rose)
                         .frame(height: 38)
                         .padding(.horizontal, 12)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.line, lineWidth: 1))
                 }
             }
@@ -209,7 +239,7 @@ struct ServiceLogo: View {
     var body: some View {
         ZStack {
             if boxed {
-                LinearGradient(colors: [.white, Color(hex: 0xFFF5F5)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [AppTheme.surface, AppTheme.subtle], startPoint: .topLeading, endPoint: .bottomTrailing)
             } else {
                 Color.clear
             }
@@ -221,7 +251,7 @@ struct ServiceLogo: View {
         .overlay {
             if boxed {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(Color(hex: 0xEFDADA), lineWidth: 1)
+                    .stroke(AppTheme.line, lineWidth: 1)
             }
         }
         .shadow(color: .black.opacity(boxed ? 0.12 : 0), radius: boxed ? 3 : 0, y: boxed ? 2 : 0)
@@ -256,7 +286,7 @@ struct BookingStepper: View {
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(active ? .white : AppTheme.ink)
             .frame(width: 36, height: 36)
-            .background(active ? AppTheme.green : Color(hex: 0xE8E8E8), in: Circle())
+            .background(active ? AppTheme.green : AppTheme.subtle, in: Circle())
             .shadow(color: active ? AppTheme.green.opacity(0.25) : .clear, radius: 5, y: 3)
     }
 
@@ -287,7 +317,7 @@ struct BottomNav: View {
         .padding(.horizontal, 12)
         .background(
             LinearGradient(
-                colors: [Color.white, Color(hex: 0xFFF9F6)],
+                colors: [AppTheme.surface, AppTheme.bg],
                 startPoint: .top,
                 endPoint: .bottom
             ),
@@ -311,7 +341,7 @@ struct BottomNav: View {
                 Text(title)
                     .font(.system(size: 12, weight: selected ? .bold : .regular))
             }
-            .foregroundStyle(selected ? AppTheme.rose : Color(hex: 0x707070))
+            .foregroundStyle(selected ? AppTheme.rose : AppTheme.muted)
             .opacity(selected ? 1 : 0.76)
             .offset(y: selected ? -6 : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

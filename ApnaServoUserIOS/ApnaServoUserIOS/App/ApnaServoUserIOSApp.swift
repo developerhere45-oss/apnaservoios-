@@ -10,9 +10,15 @@ final class UserFirebaseAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // SwiftUI text inputs can otherwise inherit a white editing colour from
-        // the device's Dark Mode, even though ApnaServo has a fixed light UI.
-        let inputColor = UIColor(red: 22 / 255, green: 22 / 255, blue: 22 / 255, alpha: 1)
+        // AsyncImage and URLSession share this cache. A bounded cache avoids
+        // repeatedly downloading offer/banner artwork while keeping memory
+        // predictable on older iPhones.
+        URLCache.shared = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024)
+        let inputColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 245 / 255, green: 242 / 255, blue: 244 / 255, alpha: 1)
+                : UIColor(red: 22 / 255, green: 22 / 255, blue: 22 / 255, alpha: 1)
+        }
         UITextField.appearance().textColor = inputColor
         UITextView.appearance().textColor = inputColor
         UITextField.appearance().tintColor = UIColor(red: 225 / 255, green: 42 / 255, blue: 83 / 255, alpha: 1)

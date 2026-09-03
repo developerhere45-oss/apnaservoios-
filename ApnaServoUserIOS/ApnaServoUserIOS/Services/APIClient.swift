@@ -45,6 +45,12 @@ final class APIClient {
         AppConfig.socketURL
     }
 
+    /// Published configuration is intentionally public: it contains display and
+    /// availability rules only, never an admin credential or customer data.
+    func fetchPublishedAppConfiguration() async throws -> RemoteAppControlEnvelope {
+        try await publicRequest(path: "/app-control/config?app=customer", method: "GET")
+    }
+
     func sendLoginOTP(phone: String) async throws -> OTPSendResponse {
         try await publicRequest(
             path: "/otp/send",
@@ -410,16 +416,21 @@ final class APIClient {
     }
 
     private func httpError(code: Int, data: Data) -> String {
-        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let message = object["message"] as? String,
-           !message.isEmpty {
-            return "HTTP \(code): \(message)"
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let message = object?["message"] as? String
+        let requestID = object?["requestId"] as? String
+        if (500...599).contains(code) {
+            let reference = requestID?.isEmpty == false ? " Reference: \(requestID!)." : ""
+            return "Booking service had a temporary problem. Please retry safely.\(reference)"
+        }
+        if let message, !message.isEmpty {
+            return message
         }
         switch code {
         case 401, 403: return "Authentication expired. Please login again."
         case 404: return "Requested booking was not found."
         case 408, 425, 429: return "Server is busy. Please retry in a moment."
-        case 500...599: return "Server temporarily unavailable."
+        case 500...599: return "Booking service had a temporary problem. Please retry safely."
         default: return "Request failed. Please check details and try again."
         }
     }

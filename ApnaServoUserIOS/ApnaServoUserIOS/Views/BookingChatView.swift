@@ -17,7 +17,7 @@ struct BookingChatView: View {
 
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 10) {
+                    LazyVStack(spacing: 10) {
                         if !hasAssignedPartner {
                             EmptyState(title: "Partner chat is not open yet", subtitle: "Chat becomes available automatically after a service partner accepts your booking.")
                             Button("Report an Issue to Support") {
@@ -82,7 +82,7 @@ struct ChatMessageBubble: View {
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 10)
-            .background(isMe ? AppTheme.booking : Color.white, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .background(isMe ? AppTheme.booking : AppTheme.surface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 17).stroke(isMe ? Color.clear : AppTheme.line, lineWidth: 1))
             .shadow(color: .black.opacity(isMe ? 0.10 : 0.05), radius: 5, y: 2)
             if !isMe { Spacer(minLength: 42) }
@@ -119,7 +119,7 @@ struct ChatInputDock: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.white)
+        .background(AppTheme.surface)
         .overlay(Rectangle().fill(AppTheme.line).frame(height: 1), alignment: .top)
     }
 }

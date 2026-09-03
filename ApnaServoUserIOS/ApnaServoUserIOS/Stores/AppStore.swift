@@ -63,6 +63,9 @@ final class UserAppStore: ObservableObject {
     @Published var loginPhone = ""
     @Published var loginOTPRequestID = ""
     @Published var loginOTPExpiresInSeconds = 300
+    @Published private(set) var loginOTPExpiresAt: Date?
+    @Published var showDateSheet = false
+    @Published var showTimeSheet = false
     @Published var showSettingsSheet = false
     @Published var showEditProfileSheet = false
     @Published var showLegalSheet = false
@@ -94,9 +97,15 @@ final class UserAppStore: ObservableObject {
     @Published private(set) var appControlMode: RemoteAppMode = .live
     @Published private(set) var serviceRules: [String: RemoteServiceRule] = [:]
     @Published private(set) var selectedServiceStatusMessage = ""
+    @Published private(set) var remoteAppControl: RemoteAppControlEnvelope?
 
-    let services = ServiceCatalog.services
-    let categories = ServiceCatalog.categories
+    var services: [ServiceItem] {
+        ServiceCatalog.services.filter { remoteServiceStatus(for: $0) != "DISABLED" }
+    }
+    var categories: [String] {
+        let available = Set(services.map(\.category))
+        return ServiceCatalog.categories.filter { available.contains($0) }
+    }
     let cleaningTypes = ["Home Cleaning", "Deep Cleaning", "Bathroom Cleaning", "Room Cleaning"]
     let laundryServiceTypes = ["Wash & Fold", "Dry Cleaning", "Ironing", "Wash & Iron"]
     let laundryItems = [
@@ -120,6 +129,10 @@ final class UserAppStore: ObservableObject {
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
     private let supportTicketKey = "apnaservo_user_support_ticket_id"
     private var currentAppleNonce: String?
+    private var isRefreshingBookings = false
+    private var isRefreshingLatestBooking = false
+    private var isLoadingBookingChat = false
+    private var isRefreshingNotifications = false
 
     var requiresAppleDeletionAuthorization: Bool {
         #if canImport(FirebaseAuth)
@@ -173,6 +186,63 @@ final class UserAppStore: ObservableObject {
         services.filter { $0.category == activeCategory }
     }
 
+    var remotePrimaryColor: Color {
+        Color(hexString: remoteAppControl?.config.theme.primaryColor ?? remoteAppControl?.config.ui.primaryColor ?? "#f32368")
+    }
+
+    var remoteHomeTitle: String { remoteAppControl?.config.ui.homeTitle.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+    var remoteHomeSubtitle: String { remoteAppControl?.config.ui.homeSubtitle.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+    var remoteAnnouncements: [RemoteAppContent] { remoteAppControl?.announcements ?? [] }
+    var remoteBanners: [RemoteAppContent] { remoteAppControl?.banners ?? [] }
+
+    func isHomeSectionVisible(_ id: String) -> Bool {
+        guard let config = remoteAppControl?.config else { return true }
+        if config.ui.hiddenSections.contains(id) { return false }
+        if let section = config.home.sections.first(where: { $0.id == id }) { return section.enabled }
+        return true
+    }
+
+    func homeSectionTitle(_ id: String, fallback: String) -> String {
+        let title = remoteAppControl?.config.home.sections.first(where: { $0.id == id })?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return title.isEmpty ? fallback : title
+    }
+
+    func remoteServiceStatus(for service: ServiceItem) -> String {
+        remoteAppControl?.config.services[service.id]?.status.uppercased() ?? "AVAILABLE"
+    }
+
+    func serviceIsBookable(_ service: ServiceItem) -> Bool {
+        let status = remoteServiceStatus(for: service)
+        let appMode = remoteAppControl?.config.appStatus.mode.uppercased() ?? "LIVE"
+        return (remoteAppControl?.config.booking.enabled ?? true)
+            && !["MAINTENANCE", "HIGH_DEMAND"].contains(appMode)
+            && !["DISABLED", "TEMPORARILY_UNAVAILABLE", "HIGH_DEMAND"].contains(status)
+    }
+
+    func serviceUnavailableMessage(for service: ServiceItem) -> String {
+        switch remoteAppControl?.config.appStatus.mode.uppercased() {
+        case "MAINTENANCE": return "ApnaServo is under maintenance. Please try again after some time."
+        case "HIGH_DEMAND": return "We are receiving a high number of service requests. Please try again shortly."
+        default: break
+        }
+        let configured = remoteAppControl?.config.services[service.id]?.message.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !configured.isEmpty { return configured }
+        switch remoteServiceStatus(for: service) {
+        case "HIGH_DEMAND": return "This service is receiving high demand. Please try again shortly."
+        case "TEMPORARILY_UNAVAILABLE", "DISABLED": return "This service is temporarily unavailable."
+        default: return "New bookings are temporarily paused."
+        }
+    }
+
+    func refreshRemoteAppControl() async {
+        do {
+            remoteAppControl = try await api.fetchPublishedAppConfiguration()
+            if !categories.contains(activeCategory) { activeCategory = categories.first ?? ServiceCatalog.categories[0] }
+        } catch {
+            // Keep the signed app's complete offline catalogue and design usable.
+        }
+    }
+
     var activeBookings: [Booking] {
         bookings.filter { !["completed", "cancelled", "rejected"].contains($0.status) }
     }
@@ -219,11 +289,21 @@ final class UserAppStore: ObservableObject {
             isStartupManualEntry = false
             previousScreens.removeAll()
             screen = .startupLocation
-            await refreshBookings()
+            Task { await refreshBookings(); await refreshNotifications() }
             return true
         } catch {
-            logout()
-            return false
+            // A temporary backend outage must not destroy an existing Firebase
+            // login. Restore the identity Firebase already has and retry data
+            // refreshes in the background once the UI is available.
+            let fallbackPhone = String((firebaseUser.phoneNumber ?? "").filter(\.isNumber).suffix(10))
+            guard !fallbackPhone.isEmpty else { return false }
+            profile.name = firebaseUser.displayName ?? "ApnaServo Customer"
+            profile.phone = fallbackPhone
+            profile.email = firebaseUser.email ?? ""
+            previousScreens.removeAll()
+            screen = .home
+            Task { await refreshBookings(); await refreshNotifications() }
+            return true
         }
         #else
         return false
@@ -281,6 +361,7 @@ final class UserAppStore: ObservableObject {
                 let response = try await api.sendLoginOTP(phone: loginPhone)
                 loginOTPRequestID = response.requestId
                 loginOTPExpiresInSeconds = max(1, response.expiresInSeconds)
+                loginOTPExpiresAt = Date().addingTimeInterval(TimeInterval(loginOTPExpiresInSeconds))
                 navigate(.otp)
             } catch {
                 toastMessage = error.localizedDescription
@@ -490,6 +571,7 @@ final class UserAppStore: ObservableObject {
             let response = try await api.sendLoginOTP(phone: loginPhone)
             loginOTPRequestID = response.requestId
             loginOTPExpiresInSeconds = max(1, response.expiresInSeconds)
+            loginOTPExpiresAt = Date().addingTimeInterval(TimeInterval(loginOTPExpiresInSeconds))
             return true
         } catch {
             toastMessage = error.localizedDescription
@@ -501,6 +583,12 @@ final class UserAppStore: ObservableObject {
         guard !isAuthenticating else { return false }
         guard !loginOTPRequestID.isEmpty else {
             toastMessage = "OTP session expired. Please request a new OTP."
+            return false
+        }
+        if let expiresAt = loginOTPExpiresAt, expiresAt <= Date() {
+            loginOTPRequestID = ""
+            loginOTPExpiresAt = nil
+            toastMessage = "This OTP has expired. Please request a new one."
             return false
         }
         isAuthenticating = true
@@ -517,12 +605,13 @@ final class UserAppStore: ObservableObject {
             profile.name = loginName
             profile.phone = verification.phone.filter(\.isNumber).suffix(10).description
             loginOTPRequestID = ""
+            loginOTPExpiresAt = nil
             startupLocationPhase = .idle
             startupManualAddress = ""
             isStartupManualEntry = false
             navigate(.startupLocation, remember: false)
             await syncUserProfile()
-            await refreshBookings()
+            Task { await refreshBookings(); await refreshNotifications() }
             await openPendingNotificationDeepLinkIfNeeded()
             return true
         } catch {
@@ -737,6 +826,14 @@ final class UserAppStore: ObservableObject {
     }
 
     func startBooking(_ service: ServiceItem, commercial: Bool = false) {
+        guard serviceIsBookable(service) else {
+            toastMessage = serviceUnavailableMessage(for: service)
+            return
+        }
+        guard activeBookings.count < (remoteAppControl?.config.booking.maxActiveBookings ?? 10) else {
+            toastMessage = "You already have the maximum number of active bookings allowed."
+            return
+        }
         selectedService = service
         isCommercialBooking = commercial
         bookingLocationTask?.cancel()
@@ -1153,7 +1250,9 @@ final class UserAppStore: ObservableObject {
     }
 
     func loadBookingChat() async {
-        guard let booking = latestBooking else { return }
+        guard let booking = latestBooking, !isLoadingBookingChat else { return }
+        isLoadingBookingChat = true
+        defer { isLoadingBookingChat = false }
         do {
             bookingChatMessages = try await api.fetchBookingChatMessages(bookingId: booking.id, token: apiToken)
             await api.markBookingChatSeen(bookingId: booking.id, token: apiToken)
@@ -1213,6 +1312,17 @@ final class UserAppStore: ObservableObject {
             return copy
         }
         Task { await api.markNotificationRead(item.id, token: apiToken) }
+    }
+
+    func refreshNotifications() async {
+        guard isLoggedIn, !isRefreshingNotifications else { return }
+        isRefreshingNotifications = true
+        defer { isRefreshingNotifications = false }
+        do {
+            notifications = try await api.fetchNotifications(token: apiToken)
+        } catch {
+            // Keep visible notification state on a temporary network failure.
+        }
     }
 
     func openNotification(_ item: AppNotificationItem) {
@@ -1452,6 +1562,9 @@ final class UserAppStore: ObservableObject {
     }
 
     func refreshBookings() async {
+        guard isLoggedIn, !isRefreshingBookings else { return }
+        isRefreshingBookings = true
+        defer { isRefreshingBookings = false }
         do {
             let liveBookings = try await api.fetchUserBookings(token: apiToken)
             // Keep a just-created local booking while a read replica catches up.
@@ -1472,7 +1585,9 @@ final class UserAppStore: ObservableObject {
     }
 
     func refreshLatestBooking() async {
-        guard let booking = latestBooking else { return }
+        guard let booking = latestBooking, !isRefreshingLatestBooking else { return }
+        isRefreshingLatestBooking = true
+        defer { isRefreshingLatestBooking = false }
         do {
             let live = try await api.getBooking(booking.id, token: apiToken)
             latestBooking = live

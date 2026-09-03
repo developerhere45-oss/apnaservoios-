@@ -21,12 +21,12 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOffline)
-        // The app uses a light, image-led visual system. Keeping this fixed also
-        // prevents UIKit text fields from adopting white Dark Mode placeholder text.
-        .preferredColorScheme(.light)
-        .tint(AppTheme.loginRose)
+        .tint(store.remotePrimaryColor)
         .task {
             store.configureAppServices()
+            // Marketing/configuration is non-critical. Never hold the launch
+            // screen while waiting for it; the bundled UI is a safe fallback.
+            Task { await store.refreshRemoteAppControl() }
             guard store.screen == .splash else { return }
             if await store.restoreAuthenticatedSession() { return }
             try? await Task.sleep(nanoseconds: 900_000_000)
@@ -59,7 +59,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { phase in
             guard phase == .active else { return }
             Task {
+                await store.refreshRemoteAppControl()
                 await store.refreshBookings()
+                await store.refreshNotifications()
                 if let booking = store.latestBooking,
                    !["completed", "cancelled", "rejected"].contains(booking.status) {
                     store.startBookingPolling()
@@ -87,7 +89,7 @@ struct LoginDetailsSheet: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14)
                 .frame(height: 50)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.line, lineWidth: 1))
 
             TextField(store.loginMode == "Email" ? "Email address" : "Mobile number", text: $value)
@@ -95,7 +97,7 @@ struct LoginDetailsSheet: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 14)
                 .frame(height: 50)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.line, lineWidth: 1))
 
             Button("Continue") {

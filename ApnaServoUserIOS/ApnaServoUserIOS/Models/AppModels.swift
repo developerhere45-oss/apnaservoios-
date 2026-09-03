@@ -263,6 +263,71 @@ enum ServiceCatalog {
     }
 }
 
+// MARK: - Admin Control Center (public, published configuration)
+
+struct RemoteAppControlEnvelope: Decodable {
+    let config: RemoteAppConfiguration
+    let version: FlexibleString
+    let announcements: [RemoteAppContent]
+    let banners: [RemoteAppContent]
+}
+
+struct RemoteAppConfiguration: Decodable {
+    let appStatus: RemoteAppStatus
+    let ui: RemoteAppUI
+    let theme: RemoteAppTheme
+    let home: RemoteHome
+    let booking: RemoteBooking
+    let features: [String: RemoteFeature]
+    let services: [String: RemoteServiceAvailability]
+}
+
+struct RemoteAppStatus: Decodable { let mode: String }
+struct RemoteAppUI: Decodable { let homeTitle: String; let homeSubtitle: String; let primaryColor: String; let hiddenSections: [String] }
+struct RemoteAppTheme: Decodable { let primaryColor: String; let backgroundColor: String; let textColor: String; let cardRadius: Double }
+struct RemoteHome: Decodable { let sections: [RemoteHomeSection] }
+struct RemoteHomeSection: Decodable { let id: String; let enabled: Bool; let title: String; let subtitle: String; let imageUrl: String; let ctaText: String; let ctaAction: String }
+struct RemoteBooking: Decodable { let enabled: Bool; let maxActiveBookings: Int; let cancellationEnabled: Bool }
+struct RemoteFeature: Decodable { let enabled: Bool; let audience: String }
+struct RemoteServiceAvailability: Decodable { let status: String; let message: String }
+struct RemoteAppContent: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let message: String
+    let imageUrl: String
+    let ctaText: String
+    let ctaAction: String
+    let serviceCategory: String
+    let placement: String
+    let bannerStyle: RemoteBannerStyle?
+}
+
+struct RemoteBannerStyle: Decodable {
+    let backgroundColor: String?
+    let overlayColor: String?
+    let overlayOpacity: Double?
+    let titleColor: String?
+    let messageColor: String?
+    let ctaBackgroundColor: String?
+    let ctaTextColor: String?
+    let titleFont: String?
+    let titleWeight: String?
+    let titleSize: Double?
+    let messageSize: Double?
+    let textAlignment: String?
+}
+
+/// The API has returned the config version as both a number and a string over time.
+struct FlexibleString: Decodable {
+    let value: String
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let text = try? container.decode(String.self) { value = text }
+        else if let number = try? container.decode(Int.self) { value = String(number) }
+        else { value = "" }
+    }
+}
+
 struct UserProfile: Codable, Hashable {
     var name: String = ""
     var phone: String = ""
