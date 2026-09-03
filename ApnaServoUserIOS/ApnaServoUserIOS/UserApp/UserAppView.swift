@@ -284,7 +284,6 @@ struct LoginScreen: View {
                 }
                 .frame(width: proxy.size.width, alignment: .leading)
             }
-            .scrollBounceBehavior(.basedOnSize)
             .background(AppTheme.loginBg)
             .ignoresSafeArea(edges: .top)
         }
