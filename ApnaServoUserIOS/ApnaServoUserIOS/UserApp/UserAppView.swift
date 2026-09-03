@@ -783,6 +783,11 @@ struct HomeScreen: View {
             GeometryReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
+                        if store.isOutsideGuwahatiServiceArea {
+                            OutsideServiceAreaBanner()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        }
                         HomeHero(
                             showSearch: $showSearch,
                             height: min(340, max(292, physicalScreenHeight * 0.38))
@@ -827,6 +832,30 @@ struct HomeScreen: View {
         UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
             .first ?? 844
+    }
+}
+
+private struct OutsideServiceAreaBanner: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color(hex: 0xB26A00))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Attention")
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundStyle(Color(hex: 0x6D4100))
+                Text("ApnaServo is currently available only in Guwahati. We'll be available in your area soon.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color(hex: 0x765522))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(13)
+        .background(Color(hex: 0xFFF4D6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: 0xE8B84D), lineWidth: 1))
+        .accessibilityIdentifier("outsideServiceAreaAttention")
     }
 }
 

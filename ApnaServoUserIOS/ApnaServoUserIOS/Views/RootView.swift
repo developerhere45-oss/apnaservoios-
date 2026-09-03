@@ -1,16 +1,26 @@
 import SwiftUI
 import AuthenticationServices
 import UIKit
+import Network
 
 struct RootView: View {
     @EnvironmentObject private var store: UserAppStore
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var networkMonitor = UserNetworkMonitor()
 
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             UserAppView()
+            if networkMonitor.isOffline {
+                OfflineReconnectScreen {
+                    Task { await networkMonitor.retry() }
+                }
+                .transition(.opacity)
+                .zIndex(100)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOffline)
         // The app uses a light, image-led visual system. Keeping this fixed also
         // prevents UIKit text fields from adopting white Dark Mode placeholder text.
         .preferredColorScheme(.light)
@@ -177,6 +187,71 @@ struct EditProfileSheet: View {
         .frame(height: 52)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.line, lineWidth: 1))
+    }
+}
+
+@MainActor
+private final class UserNetworkMonitor: ObservableObject {
+    @Published private(set) var isOffline = false
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "com.apnaservo.user.network-monitor")
+
+    init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.isOffline = path.status != .satisfied
+            }
+        }
+        monitor.start(queue: queue)
+    }
+
+    deinit {
+        monitor.cancel()
+    }
+
+    func retry() async {
+        guard monitor.currentPath.status == .satisfied else {
+            isOffline = true
+            return
+        }
+        do {
+            var request = URLRequest(url: URL(string: "https://apnaservobk-1.onrender.com/health")!)
+            request.timeoutInterval = 10
+            let (_, response) = try await URLSession.shared.data(for: request)
+            isOffline = (response as? HTTPURLResponse)?.statusCode != 200
+        } catch {
+            isOffline = true
+        }
+    }
+}
+
+private struct OfflineReconnectScreen: View {
+    let retry: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            VStack(spacing: 18) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 46, weight: .semibold))
+                    .foregroundStyle(AppTheme.rose)
+                    .frame(width: 96, height: 96)
+                    .background(AppTheme.rose.opacity(0.1), in: Circle())
+                Text("No internet connection")
+                    .font(.system(size: 24, weight: .black))
+                    .foregroundStyle(AppTheme.ink)
+                Text("Please check your mobile data or Wi-Fi and reconnect to continue using ApnaServo.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 34)
+                Button("Reconnect", action: retry)
+                    .roseCTA()
+                    .padding(.horizontal, 34)
+                    .padding(.top, 4)
+            }
+        }
+        .accessibilityIdentifier("offlineReconnectScreen")
     }
 }
 

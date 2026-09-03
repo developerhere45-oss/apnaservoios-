@@ -171,6 +171,16 @@ final class UserAppStore: ObservableObject {
         bookings.filter { !["completed", "cancelled", "rejected"].contains($0.status) }
     }
 
+    var isOutsideGuwahatiServiceArea: Bool {
+        guard startupLocationPhase == .detected else { return false }
+        let current = CLLocation(latitude: profile.lat, longitude: profile.lng)
+        let guwahatiCenter = CLLocation(
+            latitude: AppConfig.defaultLatitude,
+            longitude: AppConfig.defaultLongitude
+        )
+        return current.distance(from: guwahatiCenter) / 1_000 > 35
+    }
+
     func finishSplash() {
         screen = .login
     }
