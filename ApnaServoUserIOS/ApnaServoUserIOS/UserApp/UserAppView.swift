@@ -1108,7 +1108,7 @@ private struct ServiceSearchOverlay: View {
                     .foregroundStyle(AppTheme.ink)
 
                 if results.isEmpty {
-                    EmptyState(title: "No service found", subtitle: "Try another service name or view all services.")
+                    EmptyState(title: "No service found", subtitle: "Try another service name.")
                 } else {
                     VStack(spacing: 8) {
                         ForEach(results) { service in
@@ -1117,15 +1117,6 @@ private struct ServiceSearchOverlay: View {
                     }
                 }
 
-                    Button("View all services  ›") {
-                        isPresented = false
-                        DispatchQueue.main.async { store.showAllServices() }
-                    }
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.rose)
-                .frame(maxWidth: .infinity)
-                .frame(height: 42)
-                .buttonStyle(.plain)
                     }
                     .padding(16)
                 }
@@ -1329,9 +1320,7 @@ struct ServiceGridSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(title: title, actionTitle: "View all") {
-                store.showAllServices()
-            }
+            SectionTitle(title: title, actionTitle: nil, action: nil)
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
                 spacing: 10
@@ -3230,6 +3219,10 @@ struct BookingsListScreen: View {
                 .padding(.bottom, 114)
             }
         }
+        .task {
+            await store.refreshBookings()
+            store.startBookingPolling()
+        }
     }
 
     private var bookingsSummary: some View {
@@ -3391,7 +3384,7 @@ struct ProfileScreen: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
                     profileHero
-                    profileAction("Edit Profile", "Name, phone and email", "person.crop.circle.fill") {
+                    profileAction("Update Email", "Name and mobile number are locked", "person.crop.circle.fill") {
                         store.showEditProfileSheet = true
                     }
                     profileAction("My Bookings", "Track active and past bookings", "list.bullet.rectangle.fill") {

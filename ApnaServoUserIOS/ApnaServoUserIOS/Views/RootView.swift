@@ -40,7 +40,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $store.showEditProfileSheet) {
             EditProfileSheet()
-                .presentationDetents([.height(360)])
+                .presentationDetents([.height(390)])
         }
         .sheet(isPresented: $store.showLegalSheet) {
             LegalInformationSheet()
@@ -136,22 +136,47 @@ struct EditProfileSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Edit Profile")
+            Text("Update Email")
                 .font(.system(size: 22, weight: .bold))
-            TextField("Name", text: $store.profile.name)
-                .textFieldStyle(.roundedBorder)
-            TextField("Phone", text: $store.profile.phone)
-                .keyboardType(.phonePad)
-                .textFieldStyle(.roundedBorder)
+            Text("Your verified name and mobile number cannot be changed from the app.")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.muted)
+            lockedProfileField(title: "Name", value: store.profile.name, icon: "person.fill")
+            lockedProfileField(title: "Mobile number", value: store.profile.phone, icon: "phone.fill")
             TextField("Email", text: $store.profile.email)
                 .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
                 .textFieldStyle(.roundedBorder)
-            Button("Save") { Task { await store.saveProfileChanges() } }
+            Button("Save Email") { Task { await store.saveProfileChanges() } }
                 .roseCTA()
             Spacer()
         }
         .padding(20)
         .background(AppTheme.bg)
+    }
+
+    private func lockedProfileField(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.muted)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+                Text(value.isEmpty ? "Not available" : value)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+            }
+            Spacer()
+            Image(systemName: "lock.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.muted)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 52)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.line, lineWidth: 1))
     }
 }
 

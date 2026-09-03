@@ -900,6 +900,7 @@ final class UserAppStore: ObservableObject {
                 bookingRequestID = ""
                 navigate(.bookingConfirmed)
                 startBookingPolling()
+                Task { await refreshBookings() }
             } catch {
                 toastMessage = error.localizedDescription
             }
@@ -1375,7 +1376,12 @@ final class UserAppStore: ObservableObject {
     func refreshBookings() async {
         do {
             let liveBookings = try await api.fetchUserBookings(token: apiToken)
-            bookings = liveBookings
+            // Keep a just-created local booking while a read replica catches up.
+            var merged = liveBookings
+            for cached in bookings where !merged.contains(where: { $0.id == cached.id || $0.bookingCode == cached.bookingCode }) {
+                merged.append(cached)
+            }
+            bookings = merged.sorted { $0.createdAtMillis > $1.createdAtMillis }
             if let current = latestBooking,
                let updated = liveBookings.first(where: { $0.id == current.id || $0.bookingCode == current.bookingCode }) {
                 latestBooking = updated
