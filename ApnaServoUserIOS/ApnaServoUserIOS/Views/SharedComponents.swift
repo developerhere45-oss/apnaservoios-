@@ -5,7 +5,7 @@ enum AppTheme {
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(UIColor { traits in
             let value: UInt32 = traits.userInterfaceStyle == .dark ? dark : light
-            UIColor(
+            return UIColor(
                 red: CGFloat((value >> 16) & 0xff) / 255,
                 green: CGFloat((value >> 8) & 0xff) / 255,
                 blue: CGFloat(value & 0xff) / 255,
