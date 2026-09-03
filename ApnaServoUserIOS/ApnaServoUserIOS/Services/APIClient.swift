@@ -110,6 +110,13 @@ final class APIClient {
         return try await request(path: "/users/support-tickets/sync", method: "POST", token: token, body: body)
     }
 
+    func fetchSupportTicket(ticketId: String, token: String) async throws -> SupportTicketEnvelope {
+        guard let encodedTicketId = ticketId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw APIError.badResponse("Support ticket is invalid.")
+        }
+        return try await request(path: "/users/support-tickets/\(encodedTicketId)", token: token)
+    }
+
     func fetchNotifications(token: String) async throws -> [AppNotificationItem] {
         let envelope: NotificationsEnvelope = try await request(path: "/notifications?role=user", token: token)
         return envelope.notifications ?? []
@@ -513,6 +520,27 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
             }
             return granted
         } catch {
+            return false
+        }
+    }
+
+    func fetchCustomerAppControl() async throws -> CustomerAppControlEnvelope {
+        try await publicRequest(path: "/app-control/config?app=customer&platform=ios&audience=users", method: "GET")
+    }
+
+    func requestPermissionIfNeeded() async -> Bool {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            return await requestPermission()
+        case .authorized, .provisional, .ephemeral:
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+            return true
+        case .denied:
+            return false
+        @unknown default:
             return false
         }
     }

@@ -70,6 +70,8 @@ struct UserAppView: View {
             ServicePreparingScreen()
         case .servicePreparing:
             ServicePreparingScreen()
+        case .serviceHighDemand:
+            ServiceHighDemandScreen()
         case .serviceLaunching:
             ServiceLaunchingScreen()
         case .booking:
@@ -198,10 +200,13 @@ struct LoginScreen: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     ZStack(alignment: .leading) {
                         AndroidAssetImage(name: "login_home_repair_hero", contentMode: .fill)
-                            .frame(width: proxy.size.width, height: 330)
+                            .frame(
+                                width: proxy.size.width,
+                                height: min(max(proxy.size.height * 0.27, 210), 270)
+                            )
                             .clipped()
                         LinearGradient(
                             colors: [AppTheme.loginBg, AppTheme.loginBg.opacity(0.35), .clear, AppTheme.loginBg],
@@ -268,19 +273,6 @@ struct LoginScreen: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .disabled(store.isAuthenticating)
 
-                        HStack { Rectangle().frame(height: 1); Text("or"); Rectangle().frame(height: 1) }
-                            .foregroundStyle(AppTheme.line)
-
-                        Button { store.skipLoginToHome() } label: {
-                            Label("Skip to Home Screen", systemImage: "house")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppTheme.loginRose)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.loginRose.opacity(0.55)))
-                        }
-                        .buttonStyle(.plain)
-
                         safeCard(title: "Your home is in safe hands.", subtitle: "Secure  •  Trusted  •  Professional")
                     }
                     .padding(18)
@@ -292,6 +284,7 @@ struct LoginScreen: View {
                 }
                 .frame(width: proxy.size.width, alignment: .leading)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .background(AppTheme.loginBg)
             .ignoresSafeArea(edges: .top)
         }
@@ -820,6 +813,9 @@ struct HomeScreen: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: showSearch)
+        .task {
+            await store.refreshAppControl()
+        }
     }
 
     private func homeServices(_ ids: [String]) -> [ServiceItem] {
@@ -1581,9 +1577,12 @@ struct ServicePreparingScreen: View {
                     Text("We’re Preparing This Service")
                         .font(.system(size: 21, weight: .bold))
                         .foregroundStyle(AppTheme.loginRose)
-                    Text("Please wait while we set things up for you.")
+                    Text(store.selectedServiceStatusMessage.isEmpty
+                         ? "Please wait while we set things up for you."
+                         : store.selectedServiceStatusMessage)
                         .font(.system(size: 15))
                         .foregroundStyle(AppTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
@@ -1631,6 +1630,39 @@ struct ServicePreparingScreen: View {
         .padding(.vertical, 12)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+struct ServiceHighDemandScreen: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    var body: some View {
+        VStack(spacing: 24) {
+            TopBar(title: "High Demand", subtitle: store.selectedService.name, backAction: { store.back() })
+            Spacer()
+            Image(systemName: "person.3.sequence.fill")
+                .font(.system(size: 82, weight: .semibold))
+                .foregroundStyle(AppTheme.orange)
+                .frame(width: 170, height: 170)
+                .background(AppTheme.orange.opacity(0.12), in: Circle())
+            Text("Service Is in High Demand")
+                .font(.system(size: 25, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .multilineTextAlignment(.center)
+            Text(store.selectedServiceStatusMessage.isEmpty
+                 ? "We are currently receiving a high number of requests. Please try again after some time."
+                 : store.selectedServiceStatusMessage)
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.horizontal, 30)
+            Button("Back to Home") { store.selectTab(.home) }
+                .roseCTA()
+                .padding(.horizontal, 24)
+            Spacer()
+        }
+        .background(AppTheme.bg.ignoresSafeArea())
     }
 }
 
@@ -3495,6 +3527,9 @@ struct SupportChatScreen: View {
                         ForEach(store.supportMessages) { message in
                             ChatMessageBubble(message: message, isMe: message.senderRole == "user")
                                 .id(message.id)
+                                .onTapGesture {
+                                    store.retrySupportMessage(message)
+                                }
                         }
                     }
                     .padding(18)
@@ -3503,6 +3538,14 @@ struct SupportChatScreen: View {
                     if let last = store.supportMessages.last {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
+                }
+            }
+            .task {
+                await store.loadSupportChat()
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 10_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    await store.loadSupportChat(showError: false)
                 }
             }
             ChatInputDock(placeholder: "Type message", text: $text) {
@@ -3601,14 +3644,12 @@ struct CommercialFormTwoScreen: View {
     @EnvironmentObject private var store: UserAppStore
     @State private var address = ""
     @State private var scope = ""
-    @State private var preferredTime = ""
 
     var body: some View {
         CommercialFormShell(title: "Site & Scope", subtitle: store.selectedCommercialServiceTitle, back: { store.back() }) {
             FormField("Site Address", text: $address)
             FormField("Work Scope", text: $scope)
-            FormField("Preferred Inspection Time", text: $preferredTime)
-            InfoNote(text: "Inspection request will be shared with the ApnaServo operations team.")
+            InfoNote(text: "Inspection request will be shared with the ApnaServo operations team. They will coordinate the visit with you after submission.")
             Button("Submit Request") {
                 store.navigate(.commercialSubmitted)
             }

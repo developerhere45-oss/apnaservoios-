@@ -58,8 +58,6 @@ final class UserAppStore: ObservableObject {
     @Published var loginPhone = ""
     @Published var loginOTPRequestID = ""
     @Published var loginOTPExpiresInSeconds = 300
-    @Published var showDateSheet = false
-    @Published var showTimeSheet = false
     @Published var showSettingsSheet = false
     @Published var showEditProfileSheet = false
     @Published var showLegalSheet = false
@@ -87,6 +85,9 @@ final class UserAppStore: ObservableObject {
     @Published var selectedCleaningType = "Home Cleaning"
     @Published var selectedLaundryServiceType = "Wash & Fold"
     @Published var selectedLaundryItems: [String: Int] = [:]
+    @Published private(set) var appControlMode: RemoteAppMode = .live
+    @Published private(set) var serviceRules: [String: RemoteServiceRule] = [:]
+    @Published private(set) var selectedServiceStatusMessage = ""
 
     let services = ServiceCatalog.services
     let categories = ServiceCatalog.categories
@@ -197,8 +198,11 @@ final class UserAppStore: ObservableObject {
                 logout()
                 return false
             }
+            startupLocationPhase = .idle
+            startupManualAddress = ""
+            isStartupManualEntry = false
             previousScreens.removeAll()
-            screen = .home
+            screen = .startupLocation
             await refreshBookings()
             return true
         } catch {
@@ -266,11 +270,6 @@ final class UserAppStore: ObservableObject {
                 toastMessage = error.localizedDescription
             }
         }
-    }
-
-    func skipLoginToHome() {
-        previousScreens.removeAll()
-        screen = .home
     }
 
     func prepareAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
@@ -646,10 +645,71 @@ final class UserAppStore: ObservableObject {
 
     private func completeStartupLocationGate() {
         navigate(.home, remember: false)
-        Task { await openPendingNotificationDeepLinkIfNeeded() }
+        Task {
+            // Ask for booking notifications only after the location prompt has
+            // completed so iOS never has two permission dialogs competing.
+            await requestRequiredNotificationPermission()
+            await openPendingNotificationDeepLinkIfNeeded()
+        }
+    }
+
+    private func requestRequiredNotificationPermission() async {
+        let granted = await notificationService.requestPermissionIfNeeded()
+        guard granted else { return }
+        let token = await notificationService.refreshFCMToken()
+        guard !token.isEmpty, isLoggedIn else { return }
+        try? await api.saveFCMToken(token, token: apiToken)
     }
 
     func openService(_ service: ServiceItem) {
+        selectedService = service
+        Task {
+            await refreshAppControl()
+            guard selectedService.id == service.id else { return }
+            openServiceUsingCurrentControl(service)
+        }
+    }
+
+    func refreshAppControl() async {
+        do {
+            let response = try await api.fetchCustomerAppControl()
+            appControlMode = response.config.appStatus.mode
+            serviceRules = Dictionary(uniqueKeysWithValues: response.config.services.map { key, value in
+                (Self.normalizedServiceKey(key), value)
+            })
+        } catch {
+            // Keep the last known safe config when a refresh temporarily fails.
+        }
+    }
+
+    private func openServiceUsingCurrentControl(_ service: ServiceItem) {
+        selectedService = service
+        selectedServiceStatusMessage = ""
+        if appControlMode == .highDemand {
+            selectedServiceStatusMessage = "We are currently receiving a high number of service requests. Please try again after some time."
+            navigate(.serviceHighDemand)
+            return
+        }
+        if appControlMode == .maintenance {
+            selectedServiceStatusMessage = "ApnaServo is currently under maintenance. Please try again after some time."
+            navigate(.servicePreparing)
+            return
+        }
+
+        let rule = serviceRules[Self.normalizedServiceKey(service.id)] ?? RemoteServiceRule()
+        if rule.isActiveNow {
+            selectedServiceStatusMessage = rule.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch rule.status {
+            case .highDemand:
+                navigate(.serviceHighDemand)
+                return
+            case .preparing, .temporarilyUnavailable, .disabled:
+                navigate(.servicePreparing)
+                return
+            case .available:
+                break
+            }
+        }
         startBooking(service)
     }
 
@@ -662,10 +722,6 @@ final class UserAppStore: ObservableObject {
 
     func startBooking(_ service: ServiceItem) {
         selectedService = service
-        if Self.unavailableServiceIDs.contains(service.id) {
-            navigate(.serviceLaunching)
-            return
-        }
         bookingLocationTask?.cancel()
         bookingLocationTask = nil
         locationService.cancelCurrentRequest()
@@ -1108,7 +1164,8 @@ final class UserAppStore: ObservableObject {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "sent"
                 }
-                toastMessage = "Complaint ticket \(ticket.ticketId) sent to ApnaServo Support."
+                await loadSupportChat(showError: false)
+                toastMessage = "Message sent to ApnaServo Support."
             } catch {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "failed"
@@ -1221,7 +1278,44 @@ final class UserAppStore: ObservableObject {
         startBooking(ServiceCatalog.service(id: serviceId))
     }
 
-    private static let unavailableServiceIDs: Set<String> = ["carpenter", "painting"]
+    private static func normalizedServiceKey(_ value: String) -> String {
+        let key = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        switch key {
+        case "plumber": return "plumbing"
+        case "pest_control": return "pest"
+        case "roadside_assistance": return "roadside"
+        case "interior_design": return "interior"
+        default: return key
+        }
+    }
+
+    func loadSupportChat(showError: Bool = true) async {
+        guard isLoggedIn,
+              let ticketId = defaults.string(forKey: supportTicketKey),
+              !ticketId.isEmpty else { return }
+        do {
+            let ticket = try await api.fetchSupportTicket(ticketId: ticketId, token: apiToken)
+            let pending = supportMessages.filter { $0.senderRole == "user" && ["sending", "failed"].contains($0.deliveryStatus) }
+            var merged = ticket.messages
+            for local in pending where !merged.contains(where: {
+                (!$0.clientMessageId.isEmpty && $0.clientMessageId == local.clientMessageId) || $0.id == local.id
+            }) {
+                merged.append(local)
+            }
+            merged.sort { $0.createdAtMillis < $1.createdAtMillis }
+            supportMessages = merged.isEmpty ? supportMessages : merged
+        } catch {
+            if showError { toastMessage = "Support chat could not be refreshed." }
+        }
+    }
+
+    func retrySupportMessage(_ message: ChatMessage) {
+        guard message.senderRole == "user", message.deliveryStatus == "failed" else { return }
+        supportMessages.removeAll { $0.id == message.id }
+        sendSupportMessage(message.message)
+    }
 
     func logout() {
         stopBookingPolling()

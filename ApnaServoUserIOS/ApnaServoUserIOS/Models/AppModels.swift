@@ -10,6 +10,7 @@ enum UserScreen: String, CaseIterable {
     case detail
     case preparing
     case servicePreparing
+    case serviceHighDemand
     case serviceLaunching
     case booking
     case confirm
@@ -31,6 +32,99 @@ enum UserScreen: String, CaseIterable {
     case commercialPlan
     case commercialProgress
     case commercialCompleted
+}
+
+enum RemoteAppMode: String, Decodable {
+    case live = "LIVE"
+    case partiallyAvailable = "PARTIALLY_AVAILABLE"
+    case highDemand = "HIGH_DEMAND"
+    case maintenance = "MAINTENANCE"
+}
+
+enum RemoteServiceStatus: String, Decodable {
+    case available = "AVAILABLE"
+    case preparing = "PREPARING"
+    case highDemand = "HIGH_DEMAND"
+    case temporarilyUnavailable = "TEMPORARILY_UNAVAILABLE"
+    case disabled = "DISABLED"
+}
+
+struct RemoteServiceRule: Decodable, Equatable {
+    let status: RemoteServiceStatus
+    let message: String
+    let startsAt: String
+    let endsAt: String
+
+    init(
+        status: RemoteServiceStatus = .available,
+        message: String = "",
+        startsAt: String = "",
+        endsAt: String = ""
+    ) {
+        self.status = status
+        self.message = message
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+    }
+
+    var isActiveNow: Bool {
+        let now = Date()
+        if let start = Self.date(startsAt), now < start { return false }
+        if let end = Self.date(endsAt), now > end { return false }
+        return true
+    }
+
+    private static func date(_ value: String) -> Date? {
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: clean) ?? ISO8601DateFormatter().date(from: clean)
+    }
+
+    private enum CodingKeys: String, CodingKey { case status, message, startsAt, endsAt }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let rawStatus = try values.decodeIfPresent(String.self, forKey: .status) ?? ""
+        status = RemoteServiceStatus(rawValue: rawStatus.uppercased()) ?? .available
+        message = try values.decodeIfPresent(String.self, forKey: .message) ?? ""
+        startsAt = try values.decodeIfPresent(String.self, forKey: .startsAt) ?? ""
+        endsAt = try values.decodeIfPresent(String.self, forKey: .endsAt) ?? ""
+    }
+}
+
+struct CustomerAppControlEnvelope: Decodable {
+    let config: CustomerAppControlConfig
+}
+
+struct CustomerAppControlConfig: Decodable {
+    let appStatus: CustomerAppStatus
+    let services: [String: RemoteServiceRule]
+
+    private enum CodingKeys: String, CodingKey { case appStatus, services }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        appStatus = try values.decodeIfPresent(CustomerAppStatus.self, forKey: .appStatus) ?? CustomerAppStatus(mode: .live)
+        services = try values.decodeIfPresent([String: RemoteServiceRule].self, forKey: .services) ?? [:]
+    }
+}
+
+struct CustomerAppStatus: Decodable {
+    let mode: RemoteAppMode
+
+    private enum CodingKeys: String, CodingKey { case mode }
+
+    init(mode: RemoteAppMode) {
+        self.mode = mode
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let rawMode = try values.decodeIfPresent(String.self, forKey: .mode) ?? ""
+        mode = RemoteAppMode(rawValue: rawMode.uppercased()) ?? .live
+    }
 }
 
 enum StartupLocationPhase: Equatable {
@@ -437,6 +531,12 @@ struct EmptyResponse: Decodable {}
 struct SupportTicketSyncResponse: Decodable {
     let ticketId: String
     let status: String
+}
+
+struct SupportTicketEnvelope: Decodable {
+    let ticketId: String
+    let status: String
+    let messages: [ChatMessage]
 }
 
 struct OTPSendResponse: Decodable {
