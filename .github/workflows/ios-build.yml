@@ -1,0 +1,25 @@
+name: iOS Production Build Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-user-app:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build customer app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ApnaServoUserIOS/ApnaServoUserIOS.xcodeproj \
+            -scheme ApnaServoUserIOS \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
