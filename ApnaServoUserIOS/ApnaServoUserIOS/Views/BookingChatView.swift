@@ -80,11 +80,17 @@ struct ChatMessageBubble: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isMe ? .white : AppTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                if !message.deliveryStatus.isEmpty {
-                    Text(message.deliveryStatus.uppercased())
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(isMe ? .white.opacity(0.68) : AppTheme.muted)
+                HStack(spacing: 5) {
+                    Text(messageTime)
+                    if message.deliveryStatus.lowercased() == "sending" {
+                        ProgressView().controlSize(.mini)
+                    }
+                    if !message.deliveryStatus.isEmpty {
+                        Text(statusText)
+                    }
                 }
+                .font(.system(size: 9, weight: .black))
+                .foregroundStyle(message.deliveryStatus.lowercased() == "failed" ? Color.red : (isMe ? .white.opacity(0.68) : AppTheme.muted))
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 10)
@@ -97,6 +103,17 @@ struct ChatMessageBubble: View {
 
     private var fallbackSender: String {
         isMe ? "You" : "ApnaServo"
+    }
+
+    private var messageTime: String {
+        guard message.createdAtMillis > 0 else { return "" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: Date(timeIntervalSince1970: Double(message.createdAtMillis) / 1000))
+    }
+
+    private var statusText: String {
+        message.deliveryStatus.lowercased() == "failed" ? "Couldn't send • Tap to retry" : message.deliveryStatus.uppercased()
     }
 }
 

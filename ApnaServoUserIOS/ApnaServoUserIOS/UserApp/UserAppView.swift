@@ -3658,7 +3658,7 @@ struct SupportChatScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 56)
-                .background(Color.white)
+                .background(AppTheme.surface)
                 .overlay(alignment: .bottom) { Divider() }
             }
             ScrollViewReader { proxy in

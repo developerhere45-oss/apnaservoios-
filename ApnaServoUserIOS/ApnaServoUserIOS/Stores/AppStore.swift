@@ -1284,14 +1284,19 @@ final class UserAppStore: ObservableObject {
 
     func sendSupportMessage(_ text: String) {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty, isLoggedIn, !isSupportMessageSending else {
+        guard !clean.isEmpty, isLoggedIn else {
             toastMessage = "Please sign in to contact support."
+            return
+        }
+        let existingTicketId = defaults.string(forKey: supportTicketKey) ?? ""
+        guard !existingTicketId.isEmpty || !isSupportMessageSending else {
+            toastMessage = "Your support conversation is being created. Please wait a moment."
             return
         }
         let clientMessageId = UUID().uuidString
         let ticketId: String
-        if let saved = defaults.string(forKey: supportTicketKey), !saved.isEmpty {
-            ticketId = saved
+        if !existingTicketId.isEmpty {
+            ticketId = existingTicketId
         } else {
             ticketId = ""
         }
@@ -1515,8 +1520,33 @@ final class UserAppStore: ObservableObject {
 
     func retrySupportMessage(_ message: ChatMessage) {
         guard message.senderRole == "user", message.deliveryStatus == "failed" else { return }
-        supportMessages.removeAll { $0.id == message.id }
-        sendSupportMessage(message.message)
+        let ticketId = defaults.string(forKey: supportTicketKey) ?? ""
+        guard !ticketId.isEmpty || !isSupportMessageSending else { return }
+        isSupportMessageSending = true
+        if let index = supportMessages.firstIndex(where: { $0.id == message.id }) {
+            supportMessages[index].deliveryStatus = "sending"
+        }
+        Task {
+            do {
+                let ticket = try await api.sendSupportTicketMessage(
+                    ticketId: ticketId,
+                    clientMessageId: message.clientMessageId,
+                    message: message.message,
+                    booking: latestBooking,
+                    token: apiToken
+                )
+                defaults.set(ticket.ticketId, forKey: supportTicketKey)
+                supportTicketId = ticket.ticketId
+                supportTicketStatus = ticket.status
+                await loadSupportChat(showError: false)
+            } catch {
+                if let index = supportMessages.firstIndex(where: { $0.id == message.id }) {
+                    supportMessages[index].deliveryStatus = "failed"
+                }
+                toastMessage = "Couldn't send message. Tap to retry."
+            }
+            isSupportMessageSending = false
+        }
     }
 
     func logout() {
