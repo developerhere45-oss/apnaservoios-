@@ -4,6 +4,10 @@ import Security
 import UIKit
 import UserNotifications
 
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
 #endif
@@ -15,6 +19,7 @@ import FirebaseCore
 enum APIError: LocalizedError {
     case missingToken
     case invalidURL
+    case unauthorized(String)
     case badResponse(String)
 
     var errorDescription: String? {
@@ -23,6 +28,8 @@ enum APIError: LocalizedError {
             return "Your session is unavailable. Please sign in again."
         case .invalidURL:
             return "Backend URL invalid."
+        case .unauthorized(let message):
+            return message
         case .badResponse(let message):
             return message
         }
@@ -156,10 +163,13 @@ final class APIClient {
         let _: EmptyResponse? = try? await request(path: path, method: "PATCH", token: token, body: [:])
     }
 
-    func markAllNotificationsRead(_ notificationIds: [String], token: String) async {
-        for notificationId in notificationIds {
-            await markNotificationRead(notificationId, token: token)
-        }
+    func markAllNotificationsRead(token: String) async {
+        let _: EmptyResponse? = try? await request(
+            path: "/notifications/read-all?role=user",
+            method: "PATCH",
+            token: token,
+            body: [:]
+        )
     }
 
     func createBooking(service: ServiceItem, draft: BookingDraft, profile: UserProfile, city: String, fcmToken: String, requestID: String, commercial: Bool, token: String) async throws -> Booking {
@@ -323,12 +333,33 @@ final class APIClient {
         guard !resolvedToken.isEmpty else { throw APIError.missingToken }
 
         var lastError: Error?
+        var requestToken = resolvedToken
+        var refreshedExpiredToken = false
         let ordered = [activeBaseURL] + baseURLs.filter { $0 != activeBaseURL }
         for baseURL in ordered {
             do {
-                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: resolvedToken, body: body)
+                let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: requestToken, body: body)
                 activeBaseURL = baseURL
                 return value
+            } catch APIError.unauthorized(_) where !refreshedExpiredToken {
+                refreshedExpiredToken = true
+                #if canImport(FirebaseAuth)
+                if let firebaseUser = Auth.auth().currentUser {
+                    do {
+                        requestToken = try await firebaseUser.getIDToken(forcingRefresh: true)
+                        SecureStore().set(requestToken, for: "user_api_token")
+                        let value: T = try await execute(baseURL: baseURL, path: path, method: method, token: requestToken, body: body)
+                        activeBaseURL = baseURL
+                        return value
+                    } catch {
+                        lastError = error
+                    }
+                } else {
+                    lastError = APIError.unauthorized("Your session has expired. Please sign in again.")
+                }
+                #else
+                lastError = APIError.unauthorized("Your session has expired. Please sign in again.")
+                #endif
             } catch {
                 lastError = error
             }
@@ -366,6 +397,7 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 14
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
         if !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -386,6 +418,9 @@ final class APIClient {
             throw APIError.badResponse("Backend response invalid.")
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 {
+                throw APIError.unauthorized("Your session has expired. Please sign in again.")
+            }
             throw APIError.badResponse(httpError(code: http.statusCode, data: data))
         }
         if data.isEmpty {
@@ -478,7 +513,7 @@ final class SecureStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         SecItemAdd(addQuery as CFDictionary, nil)
     }

@@ -1426,14 +1426,13 @@ final class UserAppStore: ObservableObject {
     }
 
     func markAllNotificationsRead() {
-        let unreadIds = notifications.filter { !$0.isRead }.map(\.id)
         notifications = notifications.map { notification in
             var copy = notification
             copy.isRead = true
             return copy
         }
         Task {
-            await api.markAllNotificationsRead(unreadIds, token: apiToken)
+            await api.markAllNotificationsRead(token: apiToken)
         }
     }
 

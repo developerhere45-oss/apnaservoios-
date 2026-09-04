@@ -9,6 +9,8 @@ enum AppConfig {
     static let defaultCity = "Guwahati"
     static let defaultLatitude = 26.1445
     static let defaultLongitude = 91.7362
-    static let bookingStatusRefreshSeconds: UInt64 = 2_000_000_000
+    // Push notifications are primary. This foreground poll is only a bounded
+    // recovery path for delayed/missed pushes and must stay gentle at scale.
+    static let bookingStatusRefreshSeconds: UInt64 = 8_000_000_000
     static let supportUploadMaxBytes = 2_500_000
 }

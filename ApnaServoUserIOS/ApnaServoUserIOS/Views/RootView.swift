@@ -57,7 +57,10 @@ struct RootView: View {
                 .presentationDetents([.large])
         }
         .onChange(of: scenePhase) { phase in
-            guard phase == .active else { return }
+            guard phase == .active else {
+                store.stopBookingPolling()
+                return
+            }
             Task {
                 await store.refreshRemoteAppControl()
                 await store.refreshBookings()
