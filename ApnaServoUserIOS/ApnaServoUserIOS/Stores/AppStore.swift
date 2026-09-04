@@ -1234,18 +1234,39 @@ final class UserAppStore: ObservableObject {
         let local = ChatMessage.local(text: clean, booking: booking)
         bookingChatMessages.append(local)
         Task {
-            do {
-                let sent = try await api.sendBookingChatMessage(bookingId: booking.id, message: clean, token: apiToken)
-                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
-                    bookingChatMessages[index] = sent
-                }
-                await api.monitorBookingChat(bookingId: booking.id, message: clean, clientMessageId: sent.clientMessageId, token: apiToken)
-            } catch {
-                if let index = bookingChatMessages.firstIndex(where: { $0.id == local.id }) {
-                    bookingChatMessages[index].deliveryStatus = "failed"
-                }
-                toastMessage = "Message could not be sent. Please retry."
+            await dispatchBookingChat(local, booking: booking)
+        }
+    }
+
+    func retryBookingChat(_ message: ChatMessage) {
+        guard message.deliveryStatus.lowercased() == "failed", let booking = latestBooking else { return }
+        if let index = bookingChatMessages.firstIndex(where: { $0.id == message.id }) {
+            bookingChatMessages[index].deliveryStatus = "sending"
+        }
+        Task { await dispatchBookingChat(message, booking: booking) }
+    }
+
+    private func dispatchBookingChat(_ local: ChatMessage, booking: Booking) async {
+        do {
+            let sent = try await api.sendBookingChatMessage(
+                bookingId: booking.id,
+                message: local.message,
+                clientMessageId: local.clientMessageId,
+                token: apiToken
+            )
+            if let index = bookingChatMessages.firstIndex(where: {
+                $0.id == local.id || (!local.clientMessageId.isEmpty && $0.clientMessageId == local.clientMessageId)
+            }) {
+                bookingChatMessages[index] = sent
             }
+            await api.monitorBookingChat(bookingId: booking.id, message: local.message, clientMessageId: sent.clientMessageId, token: apiToken)
+        } catch {
+            if let index = bookingChatMessages.firstIndex(where: {
+                $0.id == local.id || (!local.clientMessageId.isEmpty && $0.clientMessageId == local.clientMessageId)
+            }) {
+                bookingChatMessages[index].deliveryStatus = "failed"
+            }
+            toastMessage = "Couldn't send message. Tap the failed message to retry."
         }
     }
 

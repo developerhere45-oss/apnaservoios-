@@ -30,6 +30,12 @@ struct BookingChatView: View {
                         } else {
                             ForEach(store.bookingChatMessages) { message in
                                 ChatMessageBubble(message: message, isMe: message.senderRole == "user")
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if message.senderRole == "user" && message.deliveryStatus.lowercased() == "failed" {
+                                            store.retryBookingChat(message)
+                                        }
+                                    }
                                     .id(message.id)
                             }
                         }

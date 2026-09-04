@@ -282,8 +282,7 @@ final class APIClient {
         return envelope.messages
     }
 
-    func sendBookingChatMessage(bookingId: String, message: String, token: String) async throws -> ChatMessage {
-        let clientMessageId = "IOSUSER\(Int(Date().timeIntervalSince1970 * 1000))"
+    func sendBookingChatMessage(bookingId: String, message: String, clientMessageId: String, token: String) async throws -> ChatMessage {
         let envelope: SendChatEnvelope = try await request(
             path: "/bookings/\(bookingId)/chat/messages",
             method: "POST",

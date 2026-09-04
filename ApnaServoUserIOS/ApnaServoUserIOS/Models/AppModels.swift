@@ -531,7 +531,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             senderName: senderRole == "user" ? "You" : booking.partnerName,
             message: text,
             clientMessageId: "IOSUSER\(Int(Date().timeIntervalSince1970 * 1000))",
-            deliveryStatus: "queued",
+            deliveryStatus: "sending",
             createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)
         )
     }
