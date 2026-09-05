@@ -347,14 +347,16 @@ final class UserAppStore: ObservableObject {
     func showOTPLogin() {
         let cleanName = loginName.trimmingCharacters(in: .whitespacesAndNewlines)
         let digits = loginPhone.filter(\.isNumber)
+        guard cleanName.count >= 2 else {
+            toastMessage = "Enter your full name to continue."
+            return
+        }
         guard digits.count == 10 else {
             toastMessage = "Enter a valid 10-digit mobile number."
             return
         }
         guard !isAuthenticating else { return }
-        // A review/demo phone flow must be usable with the supplied phone
-        // number alone. The user can personalise this default in Profile.
-        loginName = cleanName.isEmpty ? "ApnaServo Customer" : cleanName
+        loginName = cleanName
         loginPhone = String(digits.suffix(10))
         isAuthenticating = true
         Task {

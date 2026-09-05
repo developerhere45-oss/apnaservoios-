@@ -262,20 +262,20 @@ struct LoginScreen: View {
                             .foregroundStyle(AppTheme.muted)
                             .multilineTextAlignment(.center)
 
-                        loginField(icon: "person.fill", placeholder: "Full name (optional)", text: $store.loginName, field: .name)
+                        loginField(icon: "person.fill", placeholder: "Full name", text: $store.loginName, field: .name)
                         phoneField
 
                         Button { store.showOTPLogin() } label: {
-                            HStack {
-                                Spacer()
+                            ZStack {
                                 if store.isAuthenticating {
                                     ProgressView().tint(.white)
                                 } else {
                                     Text("Send OTP")
-                                }
-                                Spacer()
-                                if !store.isAuthenticating {
-                                    Image(systemName: "arrow.right")
+                                    HStack {
+                                        Spacer()
+                                        Image(systemName: "arrow.right")
+                                            .padding(.trailing, 18)
+                                    }
                                 }
                             }
                             .roseCTA()
