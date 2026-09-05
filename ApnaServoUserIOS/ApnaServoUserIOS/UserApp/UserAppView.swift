@@ -3561,15 +3561,19 @@ struct ProfileScreen: View {
                     profileAction("Saved Addresses", "Home and service locations", "house.fill") {
                         store.showSavedAddressCard = true
                     }
-                    profileAction("No Upfront Payment", "Pay only after service and quote approval", "shield.checkered") {
-                        store.paymentInfoExpanded.toggle()
-                    }
-                    if store.paymentInfoExpanded {
-                        Text("ApnaServo never collects upfront payment. The partner shares the final quote after inspection, and payment is handled only after service with your approval.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .androidCard(padding: 12, radius: 14)
+                    ExpandableProfileCard(title: "No Upfront Payment", subtitle: "Pay only after service and quote approval", icon: "shield.checkered", isExpanded: store.paymentInfoExpanded, onToggle: { store.paymentInfoExpanded.toggle() }) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ApnaServo never collects upfront payment. The partner shares the final quote after inspection, and payment is handled only after service with your approval.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppTheme.bookingSoft.opacity(0.42), in: RoundedRectangle(cornerRadius: 13))
+                            accordionPoint("No advance payment")
+                            accordionPoint("Pay only after service is completed")
+                            accordionPoint("Payment after your approval")
+                        }
                     }
                     profileAction("Help & Support", "Chat with ApnaServo support", "questionmark.circle.fill") {
                         store.navigate(.support)
@@ -3580,15 +3584,12 @@ struct ProfileScreen: View {
                     profileAction("Delete Account", "Permanently delete your account and personal data", "trash.fill") {
                         store.showLegalSheet = true
                     }
-                    profileAction("About ApnaServo", "Trusted home repair services", "info.circle.fill") {
-                        store.aboutInfoExpanded.toggle()
-                    }
-                    if store.aboutInfoExpanded {
-                        Text("ApnaServo helps customers book trusted home service experts for AC repair, electrician, plumbing, cleaning, pest control and more. You can book, track and get support from one single app.")
+                    ExpandableProfileCard(title: "About ApnaServo", subtitle: "Trusted home repair services", icon: "info.circle.fill", isExpanded: store.aboutInfoExpanded, onToggle: { store.aboutInfoExpanded.toggle() }) {
+                        Text("ApnaServo connects customers with trusted local service partners. Book a service, get an inspection-based quote, and approve the final price before payment. Our goal is to make everyday home and local services simple, transparent and reliable.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .androidCard(padding: 12, radius: 14)
                     }
                     Button("Logout") {
                         store.logout()
@@ -3645,6 +3646,16 @@ struct ProfileScreen: View {
         .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 13))
     }
 
+    private func accordionPoint(_ text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppTheme.loginRose)
+            Text(text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.muted)
+        }
+    }
+
     private func profileAction(_ title: String, _ subtitle: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
@@ -3668,6 +3679,82 @@ struct ProfileScreen: View {
             .androidCard(padding: 14, radius: 17, shadow: 1)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ExpandableProfileCard<Details: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    let details: Details
+
+    init(title: String, subtitle: String, icon: String, isExpanded: Bool, onToggle: @escaping () -> Void, @ViewBuilder details: () -> Details) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.isExpanded = isExpanded
+        self.onToggle = onToggle
+        self.details = details()
+    }
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                onToggle()
+            }
+        } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .foregroundStyle(AppTheme.booking)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.bookingSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.system(size: 14, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                        Text(subtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(isExpanded ? AppTheme.booking : AppTheme.muted)
+                        .rotationEffect(.degrees(isExpanded ? -90 : 0))
+                }
+                .padding(14)
+
+                if isExpanded {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(AppTheme.loginRose.opacity(0.18))
+                            .frame(height: 1)
+                        details
+                            .padding(.horizontal, 14)
+                            .padding(.top, 14)
+                            .padding(.bottom, 16)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(isExpanded ? AppTheme.loginRose.opacity(0.30) : AppTheme.line, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.055), radius: 1, y: 2)
+            .contentShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to expand")
+        .animation(.easeInOut(duration: 0.25), value: isExpanded)
     }
 }
 
