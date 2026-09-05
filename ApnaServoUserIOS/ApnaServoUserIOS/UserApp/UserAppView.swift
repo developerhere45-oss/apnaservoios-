@@ -1530,9 +1530,13 @@ struct HomeServiceCard: View {
             store.openService(service)
         } label: {
             VStack(spacing: 0) {
-                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
+                GeometryReader { imageBounds in
+                    AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
+                        .frame(width: imageBounds.size.width, height: imageBounds.size.height)
+                        .clipped()
+                }
+                    .frame(maxWidth: .infinity)
                     .frame(height: 92)
-                    .frame(maxWidth: .infinity, alignment: .center)
                     .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0xF4E1E4), lineWidth: 1))
