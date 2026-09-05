@@ -101,13 +101,27 @@ struct CustomerAppControlEnvelope: Decodable {
 struct CustomerAppControlConfig: Decodable {
     let appStatus: CustomerAppStatus
     let services: [String: RemoteServiceRule]
+    let support: RemoteSupportConfiguration
 
-    private enum CodingKeys: String, CodingKey { case appStatus, services }
+    private enum CodingKeys: String, CodingKey { case appStatus, services, support }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         appStatus = try values.decodeIfPresent(CustomerAppStatus.self, forKey: .appStatus) ?? CustomerAppStatus(mode: .live)
         services = try values.decodeIfPresent([String: RemoteServiceRule].self, forKey: .services) ?? [:]
+        support = try values.decodeIfPresent(RemoteSupportConfiguration.self, forKey: .support) ?? RemoteSupportConfiguration()
+    }
+}
+
+struct RemoteSupportConfiguration: Decodable {
+    let enabled: Bool
+    let welcomeMessage: String
+    let typingDelayMs: Int
+
+    init(enabled: Bool = true, welcomeMessage: String = "Namaste! How can I help you today?", typingDelayMs: Int = 1400) {
+        self.enabled = enabled
+        self.welcomeMessage = welcomeMessage
+        self.typingDelayMs = typingDelayMs
     }
 }
 
@@ -596,6 +610,9 @@ struct EmptyResponse: Decodable {}
 struct SupportTicketSyncResponse: Decodable {
     let ticketId: String
     let status: String
+    let botReply: String?
+    let botIntent: String?
+    let typingDelayMs: Int?
 }
 
 struct SupportTicketEnvelope: Decodable {

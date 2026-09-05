@@ -128,9 +128,9 @@ final class APIClient {
             "senderRole": "user",
             "senderName": "Customer",
             "message": message,
-            "category": "customer_support",
-            "priority": "normal",
-            "source": "ios_user_app"
+            "source": "ios_user_app",
+            "platform": "ios",
+            "serverBot": true
         ]
         if !ticketId.isEmpty { body["ticketId"] = ticketId }
         if let booking {

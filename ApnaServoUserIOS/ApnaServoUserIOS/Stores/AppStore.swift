@@ -48,13 +48,14 @@ final class UserAppStore: ObservableObject {
     @Published var bookings: [Booking] = []
     @Published var bookingChatMessages: [ChatMessage] = []
     @Published var supportMessages: [ChatMessage] = [
-        ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Namaste! How can I help you today?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
     ]
     @Published private(set) var supportTicketId = ""
     @Published private(set) var supportTicketStatus = ""
     @Published private(set) var supportAssignedAgent = ""
     @Published private(set) var supportBookingCode = ""
     @Published private(set) var isSupportMessageSending = false
+    @Published private(set) var isSupportBotTyping = false
     @Published var notifications: [AppNotificationItem] = []
     @Published var toastMessage = ""
     @Published var showLoginSheet = false
@@ -783,6 +784,13 @@ final class UserAppStore: ObservableObject {
             serviceRules = Dictionary(uniqueKeysWithValues: response.config.services.map { key, value in
                 (Self.normalizedServiceKey(key), value)
             })
+            let welcome = response.config.support.welcomeMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+            if supportTicketId.isEmpty,
+               supportMessages.count == 1,
+               supportMessages.first?.id == "support-welcome",
+               !welcome.isEmpty {
+                supportMessages[0].message = welcome
+            }
         } catch {
             // Keep the last known safe config when a refresh temporarily fails.
         }
@@ -1290,8 +1298,8 @@ final class UserAppStore: ObservableObject {
             return
         }
         let existingTicketId = defaults.string(forKey: supportTicketKey) ?? ""
-        guard !existingTicketId.isEmpty || !isSupportMessageSending else {
-            toastMessage = "Your support conversation is being created. Please wait a moment."
+        guard !isSupportMessageSending else {
+            toastMessage = "ApnaServo Support is replying. Please wait a moment."
             return
         }
         let clientMessageId = UUID().uuidString
@@ -1318,8 +1326,12 @@ final class UserAppStore: ObservableObject {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "sent"
                 }
+                if !(ticket.botReply ?? "").isEmpty {
+                    isSupportBotTyping = true
+                    let delay = max(600, min(ticket.typingDelayMs ?? 1400, 5000))
+                    try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000)
+                }
                 await loadSupportChat(showError: false)
-                toastMessage = "Message sent to ApnaServo Support."
             } catch {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
                     supportMessages[index].deliveryStatus = "failed"
@@ -1549,6 +1561,7 @@ final class UserAppStore: ObservableObject {
                 }
                 toastMessage = "Couldn't send message. Tap to retry."
             }
+            isSupportBotTyping = false
             isSupportMessageSending = false
         }
     }
@@ -1567,13 +1580,14 @@ final class UserAppStore: ObservableObject {
         latestBooking = nil
         bookings = []
         supportMessages = [
-            ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Hi, how can we help?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+            ChatMessage(id: "support-welcome", bookingId: "support", bookingCode: "", senderRole: "support", senderName: "ApnaServo Support", message: "Namaste! How can I help you today?", clientMessageId: "", deliveryStatus: "sent", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
         ]
         supportTicketId = ""
         supportTicketStatus = ""
         supportAssignedAgent = ""
         supportBookingCode = ""
         isSupportMessageSending = false
+        isSupportBotTyping = false
         submittedRatings = [:]
         defaults.removeObject(forKey: submittedRatingsKey)
         defaults.removeObject(forKey: supportTicketKey)

@@ -3774,6 +3774,10 @@ struct SupportChatScreen: View {
                                     store.retrySupportMessage(message)
                                 }
                         }
+                        if store.isSupportBotTyping {
+                            SupportTypingIndicator()
+                                .id("support-typing")
+                        }
                     }
                     .padding(18)
                 }
@@ -3781,6 +3785,9 @@ struct SupportChatScreen: View {
                     if let last = store.supportMessages.last {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
+                }
+                .onChange(of: store.isSupportBotTyping) { typing in
+                    if typing { proxy.scrollTo("support-typing", anchor: .bottom) }
                 }
             }
             .task {
@@ -3806,6 +3813,37 @@ struct SupportChatScreen: View {
         var parts = [store.supportAssignedAgent.isEmpty ? "Unassigned" : "Agent: \(store.supportAssignedAgent)"]
         if !store.supportBookingCode.isEmpty { parts.append("Booking: \(store.supportBookingCode)") }
         return parts.joined(separator: " • ")
+    }
+}
+
+private struct SupportTypingIndicator: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.32)) { context in
+            let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.32) % 3
+            HStack(spacing: 9) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.rose)
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(AppTheme.muted)
+                            .frame(width: 6, height: 6)
+                            .opacity(index == phase ? 1 : 0.3)
+                    }
+                }
+                Text("ApnaServo is typing")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(AppTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .frame(maxWidth: 230, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
