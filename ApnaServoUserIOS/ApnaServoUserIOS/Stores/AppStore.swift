@@ -1466,7 +1466,11 @@ final class UserAppStore: ObservableObject {
             navigate(.serviceHighDemand)
             return false
         }
-        let rule = serviceRules["commercial"] ?? RemoteServiceRule()
+        // `commercial` is the canonical key. Keep the legacy feature-style key
+        // readable so already-published configurations continue to work.
+        let rule = serviceRules["commercial"]
+            ?? serviceRules["commercial_services"]
+            ?? RemoteServiceRule()
         guard rule.isActiveNow else { return true }
         selectedServiceStatusMessage = rule.message.trimmingCharacters(in: .whitespacesAndNewlines)
         switch rule.status {
