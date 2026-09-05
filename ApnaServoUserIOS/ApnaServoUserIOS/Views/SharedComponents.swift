@@ -87,6 +87,7 @@ struct AndroidAssetImage: View {
             if let image = AndroidAsset.image(name) {
                 Image(uiImage: image)
                     .resizable()
+                    .interpolation(.high)
                     .aspectRatio(contentMode: contentMode)
             } else {
                 ZStack {
@@ -244,7 +245,11 @@ struct ServiceLogo: View {
                 Color.clear
             }
             AndroidAssetImage(name: serviceLogoAsset(service), contentMode: .fit)
-                .padding(boxed ? 5 : 1)
+                .frame(
+                    width: max(1, size - (boxed ? 12 : 2)),
+                    height: max(1, size - (boxed ? 12 : 2)),
+                    alignment: .center
+                )
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: boxed ? 11 : 8, style: .continuous))

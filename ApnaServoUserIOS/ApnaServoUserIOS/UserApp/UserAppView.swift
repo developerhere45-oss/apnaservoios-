@@ -1519,10 +1519,11 @@ struct HomeServiceCard: View {
             store.openService(service)
         } label: {
             VStack(spacing: 0) {
-                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
+                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fit)
+                    .aspectRatio(1, contentMode: .fit)
+                    .padding(7)
                     .frame(height: 92)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0xF4E1E4), lineWidth: 1))
