@@ -1530,9 +1530,7 @@ struct HomeServiceCard: View {
             store.openService(service)
         } label: {
             VStack(spacing: 0) {
-                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fit)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 12)
+                AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fill)
                     .frame(height: 92)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
