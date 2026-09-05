@@ -1544,6 +1544,26 @@ final class UserAppStore: ObservableObject {
             }) {
                 merged.append(local)
             }
+            let generatedMessageId = "support-ticket-generated-\(ticket.ticketId)"
+            if !merged.contains(where: { $0.id == generatedMessageId }) {
+                let firstCustomerMessageTime = merged
+                    .filter { $0.senderRole == "user" }
+                    .map(\.createdAtMillis)
+                    .min() ?? Int64(Date().timeIntervalSince1970 * 1000)
+                merged.append(
+                    ChatMessage(
+                        id: generatedMessageId,
+                        bookingId: "support",
+                        bookingCode: ticket.bookingCode ?? "",
+                        senderRole: "support",
+                        senderName: "ApnaServo Support",
+                        message: "Your support ticket \(ticket.ticketId) has been generated. Our team will review your complaint and assist you shortly.",
+                        clientMessageId: generatedMessageId,
+                        deliveryStatus: "sent",
+                        createdAtMillis: firstCustomerMessageTime + 1
+                    )
+                )
+            }
             merged.sort { $0.createdAtMillis < $1.createdAtMillis }
             supportMessages = merged.isEmpty ? supportMessages : merged
         } catch {
