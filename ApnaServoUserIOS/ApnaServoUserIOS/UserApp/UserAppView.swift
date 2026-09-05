@@ -3616,9 +3616,6 @@ struct ProfileScreen: View {
                     Text(store.profile.phone.isEmpty ? "Phone not shared" : store.profile.phone)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.muted)
-                    Text("Bookings, addresses and support in one place")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.muted)
                 }
             }
             HStack(spacing: 10) {
