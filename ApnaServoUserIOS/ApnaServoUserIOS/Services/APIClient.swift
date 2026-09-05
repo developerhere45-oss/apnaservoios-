@@ -147,6 +147,14 @@ final class APIClient {
         return try await request(path: "/users/support-tickets/\(encodedTicketId)", token: token)
     }
 
+    func fetchLatestSupportTicket(token: String) async throws -> SupportTicketEnvelope? {
+        let envelope: LatestSupportTicketEnvelope = try await request(
+            path: "/users/support-tickets/latest",
+            token: token
+        )
+        return envelope.ticket
+    }
+
     func fetchNotifications(token: String) async throws -> [AppNotificationItem] {
         let envelope: NotificationsEnvelope = try await request(path: "/notifications?role=user", token: token)
         return envelope.notifications ?? []

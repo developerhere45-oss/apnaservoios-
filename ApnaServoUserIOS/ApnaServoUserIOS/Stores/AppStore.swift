@@ -1519,12 +1519,16 @@ final class UserAppStore: ObservableObject {
     }
 
     func loadSupportChat(showError: Bool = true) async {
-        guard isLoggedIn,
-              !isSupportBotTyping,
-              let ticketId = defaults.string(forKey: supportTicketKey),
-              !ticketId.isEmpty else { return }
+        guard isLoggedIn, !isSupportBotTyping else { return }
         do {
-            let ticket = try await api.fetchSupportTicket(ticketId: ticketId, token: apiToken)
+            let savedTicketId = defaults.string(forKey: supportTicketKey) ?? ""
+            let ticket: SupportTicketEnvelope?
+            if savedTicketId.isEmpty {
+                ticket = try await api.fetchLatestSupportTicket(token: apiToken)
+            } else {
+                ticket = try await api.fetchSupportTicket(ticketId: savedTicketId, token: apiToken)
+            }
+            guard let ticket else { return }
             defaults.set(ticket.ticketId, forKey: supportTicketKey)
             supportTicketId = ticket.ticketId
             supportTicketStatus = ticket.status

@@ -623,6 +623,10 @@ struct SupportTicketEnvelope: Decodable {
     let messages: [ChatMessage]
 }
 
+struct LatestSupportTicketEnvelope: Decodable {
+    let ticket: SupportTicketEnvelope?
+}
+
 struct OTPSendResponse: Decodable {
     let requestId: String
     let expiresInSeconds: Int
