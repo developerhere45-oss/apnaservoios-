@@ -3774,14 +3774,23 @@ private struct SavedAddressOverlay: View {
                 .contentShape(Rectangle())
                 .onTapGesture { store.showSavedAddressCard = false }
 
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 14) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 42, weight: .semibold))
-                        .foregroundStyle(AppTheme.booking)
-                        .frame(width: 62, height: 62)
-                        .background(AppTheme.bookingSoft, in: Circle())
-                        .shadow(color: .black.opacity(0.08), radius: 5, y: 3)
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 25, weight: .semibold))
+                            .foregroundStyle(AppTheme.booking)
+                            .frame(width: 60, height: 60)
+                            .background(AppTheme.bookingSoft, in: Circle())
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(AppTheme.booking)
+                            .background(AppTheme.surface, in: Circle())
+                            .offset(x: 2, y: 2)
+                    }
+                    .frame(width: 62, height: 62)
+                    .shadow(color: AppTheme.booking.opacity(0.12), radius: 6, y: 3)
+                    .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Saved Address")
@@ -3807,38 +3816,51 @@ private struct SavedAddressOverlay: View {
                     .accessibilityLabel("Close saved address")
                 }
 
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(AppTheme.booking)
-                        .frame(width: 48, height: 48)
-                        .background(AppTheme.bookingSoft, in: Circle())
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(AppTheme.booking)
+                            .frame(width: 46, height: 46)
+                            .background(AppTheme.surface.opacity(0.78), in: Circle())
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("ApnaServo")
-                            .font(.system(size: 19, weight: .black))
-                            .foregroundStyle(AppTheme.ink)
-                        Text(savedAddress)
-                            .font(.system(size: 16))
-                            .foregroundStyle(AppTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("ApnaServo")
+                                .font(.system(size: 18, weight: .black))
+                                .foregroundStyle(AppTheme.ink)
+                            Text("Saved home address")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppTheme.muted)
+                        }
+
+                        Spacer(minLength: 6)
+
+                        Text("Default")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.booking)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.surface.opacity(0.75), in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.booking.opacity(0.12), lineWidth: 1))
                     }
 
-                    Spacer(minLength: 4)
+                    Rectangle()
+                        .fill(AppTheme.booking.opacity(0.10))
+                        .frame(height: 1)
 
-                    Text("Default")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(AppTheme.booking)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.bookingSoft, in: Capsule())
+                    Text(savedAddress)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(16)
+                .padding(17)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.bookingSoft.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
+                .background(AppTheme.bookingSoft.opacity(0.42), in: RoundedRectangle(cornerRadius: 19, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(AppTheme.booking.opacity(0.16), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 19, style: .continuous)
+                        .stroke(AppTheme.booking.opacity(0.18), lineWidth: 1)
                 }
             }
             .padding(22)
@@ -3848,7 +3870,7 @@ private struct SavedAddressOverlay: View {
                 RoundedRectangle(cornerRadius: 28)
                     .stroke(Color.white.opacity(0.7), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.22), radius: 24, y: 12)
+            .shadow(color: .black.opacity(0.20), radius: 26, y: 14)
             .padding(.horizontal, 20)
         }
     }
