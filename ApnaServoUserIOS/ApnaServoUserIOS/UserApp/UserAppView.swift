@@ -1520,8 +1520,8 @@ struct HomeServiceCard: View {
         } label: {
             VStack(spacing: 0) {
                 AndroidAssetImage(name: serviceHomeAsset(service), contentMode: .fit)
-                    .aspectRatio(1, contentMode: .fit)
-                    .padding(7)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 12)
                     .frame(height: 92)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1724,7 +1724,7 @@ struct ServicePreparingScreen: View {
             VStack(spacing: 0) {
                 preparingHeader(topInset: proxy.safeAreaInsets.top)
                 Spacer(minLength: max(42, proxy.size.height * 0.10))
-                AndroidAssetImage(name: "service_preparing_barrier", contentMode: .fit)
+                AndroidAssetImage(name: "service_preparing_barricade", contentMode: .fit)
                     .frame(
                         width: min(proxy.size.width - 46, proxy.size.height * 0.40, 360),
                         height: min(proxy.size.width - 46, proxy.size.height * 0.40, 360)
