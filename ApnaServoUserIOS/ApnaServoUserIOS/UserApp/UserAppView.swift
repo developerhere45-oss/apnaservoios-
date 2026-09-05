@@ -3908,24 +3908,34 @@ struct SupportChatScreen: View {
         VStack(spacing: 0) {
             TopBar(title: "Support Chat", subtitle: supportSubtitle, backAction: { store.selectTab(.profile) })
             if !store.supportTicketId.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "ticket.fill").foregroundStyle(AppTheme.rose)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ticket \(store.supportTicketId)")
-                            .font(.system(size: 12, weight: .black))
-                        Text(ticketDetail)
-                            .font(.system(size: 10, weight: .semibold))
+                Button {
+                    Task { await store.loadSupportChat() }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "ticket.fill").foregroundStyle(AppTheme.rose)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ticket \(store.supportTicketId)")
+                                .font(.system(size: 12, weight: .black))
+                            Text(ticketDetail)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(AppTheme.muted)
+                        }
+                        Spacer()
+                        Text(store.supportTicketStatus.replacingOccurrences(of: "_", with: " ").uppercased())
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(AppTheme.rose)
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(AppTheme.muted)
                     }
-                    Spacer()
-                    Text(store.supportTicketStatus.replacingOccurrences(of: "_", with: " ").uppercased())
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(AppTheme.rose)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal, 16)
                 .frame(height: 56)
                 .background(AppTheme.surface)
                 .overlay(alignment: .bottom) { Divider() }
+                .accessibilityHint("Refresh ticket status and messages")
             }
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {

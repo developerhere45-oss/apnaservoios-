@@ -1312,6 +1312,8 @@ final class UserAppStore: ObservableObject {
             ticketId = ""
         }
         isSupportMessageSending = true
+        isSupportBotTyping = true
+        let typingStartedAt = Date()
         supportMessages.append(ChatMessage(id: clientMessageId, bookingId: "support", bookingCode: "", senderRole: "user", senderName: "You", message: clean, clientMessageId: clientMessageId, deliveryStatus: "sending", createdAtMillis: Int64(Date().timeIntervalSince1970 * 1000)))
         Task {
             do {
@@ -1329,10 +1331,14 @@ final class UserAppStore: ObservableObject {
                     supportMessages[index].deliveryStatus = "sent"
                 }
                 if !(ticket.botReply ?? "").isEmpty {
-                    isSupportBotTyping = true
-                    let delay = max(600, min(ticket.typingDelayMs ?? 1400, 5000))
-                    try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000)
+                    let targetDelay = max(3_000, min(ticket.typingDelayMs ?? 3_500, 4_000))
+                    let elapsed = Int(Date().timeIntervalSince(typingStartedAt) * 1_000)
+                    let remainingDelay = max(0, targetDelay - elapsed)
+                    if remainingDelay > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(remainingDelay) * 1_000_000)
+                    }
                 }
+                isSupportBotTyping = false
                 await loadSupportChat(showError: false)
             } catch {
                 if let index = supportMessages.firstIndex(where: { $0.id == clientMessageId }) {
@@ -1340,6 +1346,7 @@ final class UserAppStore: ObservableObject {
                 }
                 toastMessage = error.localizedDescription
             }
+            isSupportBotTyping = false
             isSupportMessageSending = false
         }
     }
@@ -1513,6 +1520,7 @@ final class UserAppStore: ObservableObject {
 
     func loadSupportChat(showError: Bool = true) async {
         guard isLoggedIn,
+              !isSupportBotTyping,
               let ticketId = defaults.string(forKey: supportTicketKey),
               !ticketId.isEmpty else { return }
         do {
@@ -1539,8 +1547,10 @@ final class UserAppStore: ObservableObject {
     func retrySupportMessage(_ message: ChatMessage) {
         guard message.senderRole == "user", message.deliveryStatus == "failed" else { return }
         let ticketId = defaults.string(forKey: supportTicketKey) ?? ""
-        guard !ticketId.isEmpty || !isSupportMessageSending else { return }
+        guard !ticketId.isEmpty, !isSupportMessageSending else { return }
         isSupportMessageSending = true
+        isSupportBotTyping = true
+        let typingStartedAt = Date()
         if let index = supportMessages.firstIndex(where: { $0.id == message.id }) {
             supportMessages[index].deliveryStatus = "sending"
         }
@@ -1556,6 +1566,15 @@ final class UserAppStore: ObservableObject {
                 defaults.set(ticket.ticketId, forKey: supportTicketKey)
                 supportTicketId = ticket.ticketId
                 supportTicketStatus = ticket.status
+                if !(ticket.botReply ?? "").isEmpty {
+                    let targetDelay = max(3_000, min(ticket.typingDelayMs ?? 3_500, 4_000))
+                    let elapsed = Int(Date().timeIntervalSince(typingStartedAt) * 1_000)
+                    let remainingDelay = max(0, targetDelay - elapsed)
+                    if remainingDelay > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(remainingDelay) * 1_000_000)
+                    }
+                }
+                isSupportBotTyping = false
                 await loadSupportChat(showError: false)
             } catch {
                 if let index = supportMessages.firstIndex(where: { $0.id == message.id }) {
