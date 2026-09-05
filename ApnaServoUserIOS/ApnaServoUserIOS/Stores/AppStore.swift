@@ -317,12 +317,14 @@ final class UserAppStore: ObservableObject {
             previousScreens.append(screen)
         }
         screen = target
+        trackScreenView(target)
     }
 
     func selectTab(_ target: UserScreen) {
         guard [.home, .bookings, .profile].contains(target) else { return }
         previousScreens.removeAll()
         screen = target
+        trackScreenView(target)
     }
 
     func back() {
@@ -772,6 +774,16 @@ final class UserAppStore: ObservableObject {
 
     func openService(_ service: ServiceItem) {
         selectedService = service
+        Task {
+            await api.trackUserActivity(
+                event: "service_clicked",
+                screen: screen.rawValue,
+                serviceId: service.id,
+                serviceName: service.name,
+                category: service.category,
+                token: apiToken
+            )
+        }
         Task {
             await refreshAppControl()
             guard selectedService.id == service.id else { return }
@@ -1246,6 +1258,17 @@ final class UserAppStore: ObservableObject {
         bookingChatMessages.append(local)
         Task {
             await dispatchBookingChat(local, booking: booking)
+        }
+    }
+
+    private func trackScreenView(_ target: UserScreen) {
+        guard isLoggedIn, ![.splash, .login, .otp].contains(target) else { return }
+        Task {
+            await api.trackUserActivity(
+                event: "screen_view",
+                screen: target.rawValue,
+                token: apiToken
+            )
         }
     }
 

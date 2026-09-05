@@ -105,6 +105,30 @@ final class APIClient {
         )
     }
 
+    func trackUserActivity(
+        event: String,
+        screen: String,
+        serviceId: String = "",
+        serviceName: String = "",
+        category: String = "",
+        token: String
+    ) async {
+        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let _: EmptyResponse? = try? await request(
+            path: "/users/activity",
+            method: "POST",
+            token: token,
+            body: [
+                "event": event,
+                "platform": "ios",
+                "screen": screen,
+                "serviceId": serviceId,
+                "serviceName": serviceName,
+                "category": category
+            ]
+        )
+    }
+
     func requestAccountDeletion(reason: String, token: String) async throws {
         let _: EmptyResponse = try await request(
             path: "/users/delete-account-request",
