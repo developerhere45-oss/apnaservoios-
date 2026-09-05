@@ -3544,7 +3544,7 @@ struct ProfileScreen: View {
                         store.aboutInfoExpanded.toggle()
                     }
                     if store.aboutInfoExpanded {
-                        Text("Your profile, bookings, support chats, and service updates stay connected with the ApnaServo backend.")
+                        Text("ApnaServo helps customers book trusted home service experts for AC repair, electrician, plumbing, cleaning, pest control and more. You can book, track and get support from one single app.")
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.muted)
                             .frame(maxWidth: .infinity, alignment: .leading)

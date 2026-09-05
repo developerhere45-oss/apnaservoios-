@@ -343,7 +343,7 @@ struct LegalInformationSheet: View {
                 Divider()
                 Text("About ApnaServo")
                     .font(.system(size: 17, weight: .bold))
-                Text("ApnaServo connects customers with verified service partners for home and commercial service requests in supported areas.")
+                Text("ApnaServo helps customers book trusted home service experts for AC repair, electrician, plumbing, cleaning, pest control and more. You can book, track and get support from one single app.")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.muted)
                 Text("App version \(appVersion)")
