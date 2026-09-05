@@ -299,20 +299,11 @@ struct LoginScreen: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .disabled(store.isAuthenticating)
 
-                        (Text("By continuing, you agree to our ").foregroundColor(AppTheme.muted)
-                         + Text("Terms of Service").foregroundColor(AppTheme.loginRose).underline()
-                         + Text(" and ").foregroundColor(AppTheme.muted)
-                         + Text("Privacy Policy").foregroundColor(AppTheme.loginRose).underline())
+                        Text(legalAgreementText)
                             .font(.system(size: 10, weight: .medium))
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityLabel("By continuing, you agree to our Terms of Service and Privacy Policy")
-                            .overlay {
-                                HStack(spacing: 0) {
-                                    Link("", destination: AppConfig.termsURL).frame(maxWidth: .infinity)
-                                    Link("", destination: AppConfig.privacyPolicyURL).frame(maxWidth: .infinity)
-                                }.opacity(0.01)
-                            }
                     }
                     .padding(.horizontal, proxy.size.width < 360 ? 16 : 20)
                     .padding(.vertical, 22)
@@ -330,6 +321,25 @@ struct LoginScreen: View {
             .ignoresSafeArea(edges: .top)
             .scrollDismissesKeyboard(.interactively)
         }
+    }
+
+    private var legalAgreementText: AttributedString {
+        var text = AttributedString("By continuing, you agree to our Terms of Service and Privacy Policy")
+        text.foregroundColor = AppTheme.muted
+
+        if let termsRange = text.range(of: "Terms of Service") {
+            text[termsRange].foregroundColor = AppTheme.loginRose
+            text[termsRange].underlineStyle = .single
+            text[termsRange].link = AppConfig.termsURL
+        }
+
+        if let privacyRange = text.range(of: "Privacy Policy") {
+            text[privacyRange].foregroundColor = AppTheme.loginRose
+            text[privacyRange].underlineStyle = .single
+            text[privacyRange].link = AppConfig.privacyPolicyURL
+        }
+
+        return text
     }
 
     private var trustStrip: some View {
@@ -913,6 +923,7 @@ private struct OutsideServiceAreaBanner: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: 0xE8B84D), lineWidth: 1))
         .accessibilityIdentifier("outsideServiceAreaAttention")
     }
+
 }
 
 /// Content published from Admin → Control Center. The app deliberately accepts
