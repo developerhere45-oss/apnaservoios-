@@ -26,6 +26,14 @@ struct UserAppView: View {
         .background(AppTheme.bg)
         .foregroundStyle(AppTheme.ink)
         .tint(store.remotePrimaryColor)
+        .overlay {
+            if store.showSavedAddressCard {
+                SavedAddressOverlay()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(200)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: store.showSavedAddressCard)
     }
 
     private var showsBottomNav: Bool {
@@ -3519,7 +3527,7 @@ struct ProfileScreen: View {
                         store.selectTab(.bookings)
                     }
                     profileAction("Saved Addresses", "Home and service locations", "house.fill") {
-                        store.toastMessage = store.profile.address.isEmpty ? "No saved address yet." : store.profile.address
+                        store.showSavedAddressCard = true
                     }
                     profileAction("No Upfront Payment", "Pay only after service and quote approval", "shield.checkered") {
                         store.paymentInfoExpanded.toggle()
@@ -3631,6 +3639,101 @@ struct ProfileScreen: View {
             .androidCard(padding: 14, radius: 17, shadow: 1)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SavedAddressOverlay: View {
+    @EnvironmentObject private var store: UserAppStore
+
+    private var savedAddress: String {
+        let address = store.profile.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? "No saved address yet." : address
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.46)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { store.showSavedAddressCard = false }
+
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(spacing: 14) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 42, weight: .semibold))
+                        .foregroundStyle(AppTheme.booking)
+                        .frame(width: 62, height: 62)
+                        .background(AppTheme.bookingSoft, in: Circle())
+                        .shadow(color: .black.opacity(0.08), radius: 5, y: 3)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Saved Address")
+                            .font(.system(size: 22, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                        Text("Your selected address")
+                            .font(.system(size: 15))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Button {
+                        store.showSavedAddressCard = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                            .frame(width: 46, height: 46)
+                            .background(AppTheme.line.opacity(0.6), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close saved address")
+                }
+
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundStyle(AppTheme.booking)
+                        .frame(width: 48, height: 48)
+                        .background(AppTheme.bookingSoft, in: Circle())
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("ApnaServo")
+                            .font(.system(size: 19, weight: .black))
+                            .foregroundStyle(AppTheme.ink)
+                        Text(savedAddress)
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Text("Default")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppTheme.booking)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.bookingSoft, in: Capsule())
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.bookingSoft.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(AppTheme.booking.opacity(0.16), lineWidth: 1)
+                }
+            }
+            .padding(22)
+            .frame(maxWidth: 370)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 28))
+            .overlay {
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.22), radius: 24, y: 12)
+            .padding(.horizontal, 20)
+        }
     }
 }
 

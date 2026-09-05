@@ -84,6 +84,7 @@ final class UserAppStore: ObservableObject {
     @Published var authToken = ""
     @Published var paymentInfoExpanded = false
     @Published var aboutInfoExpanded = false
+    @Published var showSavedAddressCard = false
     @Published var isBookingSubmitting = false
     @Published var bookingActionInFlight = false
     @Published var submittedRatings: [String: Int] = [:]
