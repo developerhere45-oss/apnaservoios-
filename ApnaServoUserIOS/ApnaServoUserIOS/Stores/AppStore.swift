@@ -1400,8 +1400,11 @@ final class UserAppStore: ObservableObject {
             return
         }
 
-        if deepLink.actionType == "OPEN_SUPPORT" || deepLink.type.contains("support") {
+        if deepLink.actionType.uppercased() == "OPEN_SUPPORT"
+            || deepLink.type.lowercased().contains("support")
+            || deepLink.type.lowercased().contains("ticket") {
             navigate(.support, remember: false)
+            await loadSupportChat(showError: false)
             return
         }
         if deepLink.actionType == "OPEN_HOME" {

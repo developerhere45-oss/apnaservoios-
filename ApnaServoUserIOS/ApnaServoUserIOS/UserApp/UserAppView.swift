@@ -3903,13 +3903,17 @@ private struct SavedAddressOverlay: View {
 struct SupportChatScreen: View {
     @EnvironmentObject private var store: UserAppStore
     @State private var text = ""
+    @State private var openTicketRequest = 0
 
     var body: some View {
         VStack(spacing: 0) {
             TopBar(title: "Support Chat", subtitle: supportSubtitle, backAction: { store.selectTab(.profile) })
             if !store.supportTicketId.isEmpty {
                 Button {
-                    Task { await store.loadSupportChat() }
+                    Task {
+                        await store.loadSupportChat()
+                        openTicketRequest += 1
+                    }
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "ticket.fill").foregroundStyle(AppTheme.rose)
@@ -3921,10 +3925,15 @@ struct SupportChatScreen: View {
                                 .foregroundStyle(AppTheme.muted)
                         }
                         Spacer()
-                        Text(store.supportTicketStatus.replacingOccurrences(of: "_", with: " ").uppercased())
-                            .font(.system(size: 9, weight: .black))
-                            .foregroundStyle(AppTheme.rose)
-                        Image(systemName: "arrow.clockwise")
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("COMPLAINT")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(AppTheme.muted)
+                            Text(store.supportTicketStatus.replacingOccurrences(of: "_", with: " ").uppercased())
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundStyle(AppTheme.rose)
+                        }
+                        Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(AppTheme.muted)
                     }
@@ -3935,7 +3944,7 @@ struct SupportChatScreen: View {
                 .frame(height: 56)
                 .background(AppTheme.surface)
                 .overlay(alignment: .bottom) { Divider() }
-                .accessibilityHint("Refresh ticket status and messages")
+                .accessibilityHint("Open complaint status and conversation")
             }
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
@@ -3961,6 +3970,13 @@ struct SupportChatScreen: View {
                 }
                 .onChange(of: store.isSupportBotTyping) { typing in
                     if typing { proxy.scrollTo("support-typing", anchor: .bottom) }
+                }
+                .onChange(of: openTicketRequest) { _ in
+                    if let last = store.supportMessages.last {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
                 }
             }
             .task {
