@@ -3149,12 +3149,19 @@ private struct ServicePaymentPage: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Amount to be paid").font(.system(size: 12)).foregroundStyle(AppTheme.muted)
                         Text("Rs \(booking.amount)").font(.system(size: 27, weight: .bold)).foregroundStyle(AppTheme.booking)
+                        if booking.hasDiscount {
+                            HStack(spacing: 5) {
+                                Text("Rs \(booking.grossAmount)").strikethrough().foregroundStyle(AppTheme.muted)
+                                Text("You save Rs \(booking.discountAmount)").foregroundStyle(AppTheme.green)
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                        }
                     }
                     Spacer()
                     Image(systemName: "doc.text.fill").font(.system(size: 30)).foregroundStyle(AppTheme.booking.opacity(0.7))
                 }
                 Divider()
-                Text("The exact amount was sent by your service partner after completing the service.")
+                Text(booking.hasDiscount ? "\(booking.discountName.isEmpty ? \"Your discount\" : booking.discountName) has already been included in this payable amount." : "The exact amount was sent by your service partner after completing the service.")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)

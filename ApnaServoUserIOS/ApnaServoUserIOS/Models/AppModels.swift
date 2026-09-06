@@ -386,6 +386,9 @@ struct Booking: Identifiable, Codable, Hashable {
     var userPhone: String
     var defaultAmount: Int
     var finalAmount: Int
+    var grossAmount: Int
+    var discountAmount: Int
+    var discountName: String
     var quoteStatus: String
     var quoteCounterAmount: Int
     var quoteCounterMessage: String
@@ -396,6 +399,7 @@ struct Booking: Identifiable, Codable, Hashable {
 
     var displayId: String { bookingCode.isEmpty ? id : bookingCode }
     var amount: Int { finalAmount > 0 ? finalAmount : defaultAmount }
+    var hasDiscount: Bool { discountAmount > 0 && grossAmount > amount }
 
     var isAssigned: Bool {
         ["accepted", "on_the_way", "arrived", "started", "amount_pending", "completed"].contains(status)
@@ -449,6 +453,9 @@ struct Booking: Identifiable, Codable, Hashable {
         userPhone: String,
         defaultAmount: Int = 0,
         finalAmount: Int = 0,
+        grossAmount: Int = 0,
+        discountAmount: Int = 0,
+        discountName: String = "",
         quoteStatus: String = "none",
         quoteCounterAmount: Int = 0,
         quoteCounterMessage: String = "",
@@ -473,6 +480,9 @@ struct Booking: Identifiable, Codable, Hashable {
         self.userPhone = userPhone
         self.defaultAmount = defaultAmount
         self.finalAmount = finalAmount
+        self.grossAmount = grossAmount
+        self.discountAmount = discountAmount
+        self.discountName = discountName
         self.quoteStatus = quoteStatus
         self.quoteCounterAmount = quoteCounterAmount
         self.quoteCounterMessage = quoteCounterMessage
@@ -500,6 +510,9 @@ struct Booking: Identifiable, Codable, Hashable {
         userPhone = c.string("userPhone", "phone")
         defaultAmount = c.int("defaultAmount", "price")
         finalAmount = c.int("finalAmount")
+        grossAmount = c.int("grossAmount")
+        discountAmount = c.int("discountAmount")
+        discountName = c.string("discountName")
         quoteStatus = c.string("quoteStatus", fallback: "none")
         quoteCounterAmount = c.int("quoteCounterAmount")
         quoteCounterMessage = c.string("quoteCounterMessage")

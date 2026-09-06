@@ -11,6 +11,6 @@ enum AppConfig {
     static let defaultLongitude = 91.7362
     // Push notifications are primary. This foreground poll is only a bounded
     // recovery path for delayed/missed pushes and must stay gentle at scale.
-    static let bookingStatusRefreshSeconds: UInt64 = 8_000_000_000
+    static let bookingStatusRefreshSeconds: UInt64 = 5_000_000_000
     static let supportUploadMaxBytes = 2_500_000
 }
