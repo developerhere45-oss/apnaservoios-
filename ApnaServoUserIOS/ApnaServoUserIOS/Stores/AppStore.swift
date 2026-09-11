@@ -689,7 +689,10 @@ final class UserAppStore: ObservableObject {
             self.profile.lat = point.latitude
             self.profile.lng = point.longitude
             self.startupLocationPhase = .detected
-            Task { await self.syncUserProfile() }
+            guard await self.syncUserProfile(showError: true) else {
+                self.startupLocationPhase = .failure
+                return
+            }
             try? await Task.sleep(nanoseconds: 650_000_000)
             guard !Task.isCancelled,
                   self.screen == .startupLocation,
@@ -727,7 +730,10 @@ final class UserAppStore: ObservableObject {
             profile.lat = point.latitude
             profile.lng = point.longitude
             startupLocationPhase = .detected
-            Task { await syncUserProfile() }
+            guard await syncUserProfile(showError: true) else {
+                startupLocationPhase = .failure
+                return
+            }
             Task { [weak self] in
                 guard let self else { return }
                 let address = await self.locationService.address(for: coordinate)
@@ -1801,11 +1807,16 @@ final class UserAppStore: ObservableObject {
         return saved.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func syncUserProfile() async {
+    @discardableResult
+    private func syncUserProfile(showError: Bool = false) async -> Bool {
         do {
             try await api.upsertUserProfile(profile, fcmToken: notificationService.fcmToken, token: apiToken)
+            return true
         } catch {
-            // Login remains usable; the next booking write will also carry user details.
+            if showError {
+                toastMessage = "Location could not be saved. Please check your connection and retry."
+            }
+            return false
         }
     }
 
