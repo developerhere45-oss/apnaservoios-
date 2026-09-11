@@ -130,6 +130,7 @@ final class UserAppStore: ObservableObject {
     private let appleUserIDKey = "apple_user_identifier"
     private let submittedRatingsKey = "apnaservo_user_submitted_ratings"
     private let supportTicketKey = "apnaservo_user_support_ticket_id"
+    private let appControlCacheKey = "apnaservo_user_app_control_last_known_good_v1"
     private var currentAppleNonce: String?
     private var isRefreshingBookings = false
     private var isRefreshingLatestBooking = false
@@ -146,6 +147,11 @@ final class UserAppStore: ObservableObject {
     }
 
     init() {
+        if let data = defaults.data(forKey: appControlCacheKey),
+           let cached = try? JSONDecoder().decode(RemoteAppControlEnvelope.self, from: data),
+           isCompatibleAppControl(cached) {
+            remoteAppControl = cached
+        }
         if let data = defaults.data(forKey: submittedRatingsKey),
            let saved = try? JSONDecoder().decode([String: Int].self, from: data) {
             submittedRatings = saved
@@ -238,11 +244,26 @@ final class UserAppStore: ObservableObject {
 
     func refreshRemoteAppControl() async {
         do {
-            remoteAppControl = try await api.fetchPublishedAppConfiguration()
+            let candidate = try await api.fetchPublishedAppConfiguration()
+            guard isCompatibleAppControl(candidate) else { return }
+            remoteAppControl = candidate
+            if let data = try? JSONEncoder().encode(candidate) {
+                defaults.set(data, forKey: appControlCacheKey)
+            }
             if !categories.contains(activeCategory) { activeCategory = categories.first ?? ServiceCatalog.categories[0] }
         } catch {
-            // Keep the signed app's complete offline catalogue and design usable.
+            // Keep the last-known-good config, or the signed app's bundled defaults.
         }
+    }
+
+    private func isCompatibleAppControl(_ envelope: RemoteAppControlEnvelope) -> Bool {
+        guard (envelope.schemaVersion ?? 1) <= AppConfig.maximumRemoteSchemaVersion else { return false }
+        let installed = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        if let minimum = envelope.minimumAppVersion, !minimum.isEmpty,
+           installed.compare(minimum, options: .numeric) == .orderedAscending { return false }
+        if let maximum = envelope.maximumAppVersion, !maximum.isEmpty,
+           installed.compare(maximum, options: .numeric) == .orderedDescending { return false }
+        return true
     }
 
     var activeBookings: [Booking] {

@@ -279,14 +279,17 @@ enum ServiceCatalog {
 
 // MARK: - Admin Control Center (public, published configuration)
 
-struct RemoteAppControlEnvelope: Decodable {
+struct RemoteAppControlEnvelope: Codable {
     let config: RemoteAppConfiguration
     let version: FlexibleString
     let announcements: [RemoteAppContent]
     let banners: [RemoteAppContent]
+    let schemaVersion: Int?
+    let minimumAppVersion: String?
+    let maximumAppVersion: String?
 }
 
-struct RemoteAppConfiguration: Decodable {
+struct RemoteAppConfiguration: Codable {
     let appStatus: RemoteAppStatus
     let ui: RemoteAppUI
     let theme: RemoteAppTheme
@@ -296,15 +299,15 @@ struct RemoteAppConfiguration: Decodable {
     let services: [String: RemoteServiceAvailability]
 }
 
-struct RemoteAppStatus: Decodable { let mode: String }
-struct RemoteAppUI: Decodable { let homeTitle: String; let homeSubtitle: String; let primaryColor: String; let hiddenSections: [String] }
-struct RemoteAppTheme: Decodable { let primaryColor: String; let backgroundColor: String; let textColor: String; let cardRadius: Double }
-struct RemoteHome: Decodable { let sections: [RemoteHomeSection] }
-struct RemoteHomeSection: Decodable { let id: String; let enabled: Bool; let title: String; let subtitle: String; let imageUrl: String; let ctaText: String; let ctaAction: String }
-struct RemoteBooking: Decodable { let enabled: Bool; let maxActiveBookings: Int; let cancellationEnabled: Bool }
-struct RemoteFeature: Decodable { let enabled: Bool; let audience: String }
-struct RemoteServiceAvailability: Decodable { let status: String; let message: String }
-struct RemoteAppContent: Decodable, Identifiable {
+struct RemoteAppStatus: Codable { let mode: String }
+struct RemoteAppUI: Codable { let homeTitle: String; let homeSubtitle: String; let primaryColor: String; let hiddenSections: [String] }
+struct RemoteAppTheme: Codable { let primaryColor: String; let backgroundColor: String; let textColor: String; let cardRadius: Double }
+struct RemoteHome: Codable { let sections: [RemoteHomeSection] }
+struct RemoteHomeSection: Codable { let id: String; let enabled: Bool; let title: String; let subtitle: String; let imageUrl: String; let ctaText: String; let ctaAction: String }
+struct RemoteBooking: Codable { let enabled: Bool; let maxActiveBookings: Int; let cancellationEnabled: Bool }
+struct RemoteFeature: Codable { let enabled: Bool; let audience: String }
+struct RemoteServiceAvailability: Codable { let status: String; let message: String }
+struct RemoteAppContent: Codable, Identifiable {
     let id: String
     let title: String
     let message: String
@@ -316,7 +319,7 @@ struct RemoteAppContent: Decodable, Identifiable {
     let bannerStyle: RemoteBannerStyle?
 }
 
-struct RemoteBannerStyle: Decodable {
+struct RemoteBannerStyle: Codable {
     let backgroundColor: String?
     let overlayColor: String?
     let overlayOpacity: Double?
@@ -332,13 +335,18 @@ struct RemoteBannerStyle: Decodable {
 }
 
 /// The API has returned the config version as both a number and a string over time.
-struct FlexibleString: Decodable {
+struct FlexibleString: Codable {
     let value: String
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let text = try? container.decode(String.self) { value = text }
         else if let number = try? container.decode(Int.self) { value = String(number) }
         else { value = "" }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
     }
 }
 

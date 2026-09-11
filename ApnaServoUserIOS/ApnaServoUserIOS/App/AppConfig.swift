@@ -13,4 +13,5 @@ enum AppConfig {
     // recovery path for delayed/missed pushes and must stay gentle at scale.
     static let bookingStatusRefreshSeconds: UInt64 = 5_000_000_000
     static let supportUploadMaxBytes = 2_500_000
+    static let maximumRemoteSchemaVersion = 1
 }
