@@ -203,6 +203,22 @@ final class UserAppStore: ObservableObject {
     var remoteAnnouncements: [RemoteAppContent] { remoteAppControl?.announcements ?? [] }
     var remoteBanners: [RemoteAppContent] { remoteAppControl?.banners ?? [] }
 
+    var isOutsideBookingHours: Bool {
+        let hours = remoteAppControl?.config.booking.operatingHours
+        guard hours?.enabled != false else { return false }
+        let timezone = TimeZone(identifier: hours?.timezone ?? "Asia/Kolkata") ?? TimeZone(secondsFromGMT: 19_800)!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: Date())
+        return hour < (hours?.opensAtHour ?? 7) || hour >= (hours?.closesAtHour ?? 20)
+    }
+
+    var bookingHoursMessage: String {
+        let message = remoteAppControl?.config.booking.operatingHours?.closedMessage
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return message.isEmpty ? "We are available from 7:00 AM to 8:00 PM." : message
+    }
+
     func isHomeSectionVisible(_ id: String) -> Bool {
         guard let config = remoteAppControl?.config else { return true }
         if config.ui.hiddenSections.contains(id) { return false }
@@ -223,11 +239,13 @@ final class UserAppStore: ObservableObject {
         let status = remoteServiceStatus(for: service)
         let appMode = remoteAppControl?.config.appStatus.mode.uppercased() ?? "LIVE"
         return (remoteAppControl?.config.booking.enabled ?? true)
+            && !isOutsideBookingHours
             && !["MAINTENANCE", "HIGH_DEMAND"].contains(appMode)
             && !["DISABLED", "TEMPORARILY_UNAVAILABLE", "HIGH_DEMAND"].contains(status)
     }
 
     func serviceUnavailableMessage(for service: ServiceItem) -> String {
+        if isOutsideBookingHours { return bookingHoursMessage }
         switch remoteAppControl?.config.appStatus.mode.uppercased() {
         case "MAINTENANCE": return "ApnaServo is under maintenance. Please try again after some time."
         case "HIGH_DEMAND": return "We are receiving a high number of service requests. Please try again shortly."

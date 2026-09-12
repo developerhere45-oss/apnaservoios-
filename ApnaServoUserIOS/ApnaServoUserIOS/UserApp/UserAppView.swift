@@ -855,6 +855,11 @@ struct HomeScreen: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
                         }
+                        if store.isOutsideBookingHours {
+                            BookingHoursBanner(message: store.bookingHoursMessage)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 10)
+                        }
                         HomeHero(
                             showSearch: $showSearch,
                             height: min(340, max(292, physicalScreenHeight * 0.38))
@@ -924,6 +929,34 @@ private struct OutsideServiceAreaBanner: View {
         .accessibilityIdentifier("outsideServiceAreaAttention")
     }
 
+}
+
+private struct BookingHoursBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AppTheme.rose)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Booking hours")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(AppTheme.ink)
+                Text(message)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 13)
+        .frame(minHeight: 58)
+        .background(Color(hex: 0xFFF2F5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.rose.opacity(0.3), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Booking hours. \(message)")
+        .accessibilityIdentifier("bookingHoursNotice")
+    }
 }
 
 /// Content published from Admin → Control Center. The app deliberately accepts

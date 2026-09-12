@@ -304,7 +304,19 @@ struct RemoteAppUI: Codable { let homeTitle: String; let homeSubtitle: String; l
 struct RemoteAppTheme: Codable { let primaryColor: String; let backgroundColor: String; let textColor: String; let cardRadius: Double }
 struct RemoteHome: Codable { let sections: [RemoteHomeSection] }
 struct RemoteHomeSection: Codable { let id: String; let enabled: Bool; let title: String; let subtitle: String; let imageUrl: String; let ctaText: String; let ctaAction: String }
-struct RemoteBooking: Codable { let enabled: Bool; let maxActiveBookings: Int; let cancellationEnabled: Bool }
+struct RemoteBooking: Codable {
+    let enabled: Bool
+    let maxActiveBookings: Int
+    let cancellationEnabled: Bool
+    let operatingHours: RemoteOperatingHours?
+}
+struct RemoteOperatingHours: Codable {
+    let enabled: Bool
+    let timezone: String
+    let opensAtHour: Int
+    let closesAtHour: Int
+    let closedMessage: String
+}
 struct RemoteFeature: Codable { let enabled: Bool; let audience: String }
 struct RemoteServiceAvailability: Codable { let status: String; let message: String }
 struct RemoteAppContent: Codable, Identifiable {
