@@ -865,8 +865,13 @@ struct HomeScreen: View {
                             height: min(340, max(292, physicalScreenHeight * 0.38))
                         )
                         .frame(width: proxy.size.width)
+                        if let pricing = store.inspectionPricingContent {
+                            InspectionPricingCard(content: pricing)
+                                .padding(.horizontal, 14)
+                                .padding(.top, 12)
+                        }
                         VStack(spacing: 18) {
-                            if store.isHomeSectionVisible("announcements") { RemoteContentStrip(items: store.remoteAnnouncements, kind: "announcement") }
+                            if store.isHomeSectionVisible("announcements") { RemoteContentStrip(items: store.nonPricingAnnouncements, kind: "announcement") }
                             if store.isHomeSectionVisible("quick_services") { QuickServiceStrip() }
                             if store.isHomeSectionVisible("commercial") { CommercialHomeCard() }
                             if store.isHomeSectionVisible("popular_services") { ServiceGridSection(title: store.homeSectionTitle("popular_services", fallback: "Popular Services"), services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"])) }
@@ -903,6 +908,68 @@ struct HomeScreen: View {
         UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
             .first ?? 844
+    }
+}
+
+private struct InspectionPricingCard: View {
+    let content: RemoteAppContent
+
+    var body: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 12) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundStyle(Color(hex: 0x8F0D2B))
+                    Text("₹")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Color(hex: 0xA91338), in: Circle())
+                        .offset(x: 8, y: 7)
+                }
+                .frame(width: 62, height: 58)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(content.title)
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(Color(hex: 0x8F0D2B))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(content.message.components(separatedBy: ". Transparent").first.map { $0 + "." } ?? content.message)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Rectangle()
+                .fill(Color(hex: 0xD96C86).opacity(0.65))
+                .frame(width: 1, height: 62)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 7) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(Color(hex: 0xA91338))
+                    Text(content.ctaText.isEmpty ? "Transparent\nPricing" : content.ctaText)
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(Color(hex: 0x8F0D2B))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(content.ctaAction.isEmpty ? "No hidden charges" : content.ctaAction)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+            }
+            .frame(width: 118, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(hex: 0xFFF0F3), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color(hex: 0xF3CBD4), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Pricing will be displayed after inspection. Transparent pricing. No hidden charges.")
+        .accessibilityIdentifier("inspectionPricingCard")
     }
 }
 

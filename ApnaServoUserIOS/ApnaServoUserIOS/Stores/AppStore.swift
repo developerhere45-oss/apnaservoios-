@@ -202,6 +202,12 @@ final class UserAppStore: ObservableObject {
     var remoteHomeSubtitle: String { remoteAppControl?.config.ui.homeSubtitle.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
     var remoteAnnouncements: [RemoteAppContent] { remoteAppControl?.announcements ?? [] }
     var remoteBanners: [RemoteAppContent] { remoteAppControl?.banners ?? [] }
+    var inspectionPricingContent: RemoteAppContent? {
+        remoteAnnouncements.first { $0.id == "system-inspection-pricing" }
+    }
+    var nonPricingAnnouncements: [RemoteAppContent] {
+        remoteAnnouncements.filter { $0.id != "system-inspection-pricing" }
+    }
 
     var isOutsideBookingHours: Bool {
         let hours = remoteAppControl?.config.booking.operatingHours
