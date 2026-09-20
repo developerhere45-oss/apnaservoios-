@@ -300,7 +300,17 @@ struct RemoteAppConfiguration: Codable {
 }
 
 struct RemoteAppStatus: Codable { let mode: String }
-struct RemoteAppUI: Codable { let homeTitle: String; let homeSubtitle: String; let primaryColor: String; let hiddenSections: [String] }
+struct RemoteAppUI: Codable { let homeTitle: String; let homeSubtitle: String; let primaryColor: String; let hiddenSections: [String]; var headerNotices: [RemoteHeaderNotice]? = nil; var sectionOrder: [String]? = nil; var sectionSpacing: Double? = nil }
+struct RemoteHeaderNotice: Codable, Identifiable {
+    let id: String
+    let enabled: Bool
+    let title: String
+    let message: String
+    let backgroundColor: String
+    let textColor: String
+    let fontSize: Double
+    let padding: Double
+}
 struct RemoteAppTheme: Codable { let primaryColor: String; let backgroundColor: String; let textColor: String; let cardRadius: Double }
 struct RemoteHome: Codable { let sections: [RemoteHomeSection] }
 struct RemoteHomeSection: Codable { let id: String; let enabled: Bool; let title: String; let subtitle: String; let imageUrl: String; let ctaText: String; let ctaAction: String }

@@ -850,6 +850,18 @@ struct HomeScreen: View {
             GeometryReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
+                        ForEach((store.remoteAppControl?.config.ui.headerNotices ?? []).prefix(5).filter { $0.enabled }) { notice in
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !notice.title.isEmpty { Text(notice.title).bold() }
+                                if !notice.message.isEmpty { Text(notice.message) }
+                            }
+                            .font(.system(size: CGFloat(min(20, max(11, notice.fontSize)))))
+                            .foregroundStyle(Color(hex: UInt32(notice.textColor.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0x7e0012))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, CGFloat(min(24, max(8, notice.padding))))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(hex: UInt32(notice.backgroundColor.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0xfff8f9))
+                        }
                         if store.isOutsideGuwahatiServiceArea {
                             OutsideServiceAreaBanner()
                                 .padding(.horizontal, 12)
@@ -870,13 +882,20 @@ struct HomeScreen: View {
                                 .padding(.horizontal, 14)
                                 .padding(.top, 12)
                         }
-                        VStack(spacing: 18) {
+                        VStack(spacing: CGFloat(min(32, max(0, store.remoteAppControl?.config.ui.sectionSpacing ?? 18)))) {
                             if store.isHomeSectionVisible("announcements") { RemoteContentStrip(items: store.nonPricingAnnouncements, kind: "announcement") }
-                            if store.isHomeSectionVisible("quick_services") { QuickServiceStrip() }
-                            if store.isHomeSectionVisible("commercial") { CommercialHomeCard() }
-                            if store.isHomeSectionVisible("popular_services") { ServiceGridSection(title: store.homeSectionTitle("popular_services", fallback: "Popular Services"), services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"])) }
-                            if store.isHomeSectionVisible("more_services") { ServiceGridSection(title: store.homeSectionTitle("more_services", fallback: "More Services"), services: homeServices(["roadside", "painting", "interior", "ro", "pest", "appliances"])) }
-                            if store.isHomeSectionVisible("feature_strip") { WhyChooseCard() }
+                            ForEach(orderedSections, id: \.self) { section in
+                                if store.isHomeSectionVisible(section) {
+                                    switch section {
+                                    case "quick_services": QuickServiceStrip()
+                                    case "commercial": CommercialHomeCard()
+                                    case "popular_services": ServiceGridSection(title: store.homeSectionTitle(section, fallback: "Popular Services"), services: homeServices(["ac", "electrician", "plumbing", "carpenter", "cleaning", "laundry"]))
+                                    case "more_services": ServiceGridSection(title: store.homeSectionTitle(section, fallback: "More Services"), services: homeServices(["roadside", "painting", "interior", "ro", "pest", "appliances"]))
+                                    case "feature_strip": WhyChooseCard()
+                                    default: EmptyView()
+                                    }
+                                }
+                            }
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 12)
@@ -970,6 +989,13 @@ private struct InspectionPricingCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Pricing will be displayed after inspection. Transparent pricing. No hidden charges.")
         .accessibilityIdentifier("inspectionPricingCard")
+    }
+
+    private var orderedSections: [String] {
+        let defaults = ["quick_services", "commercial", "popular_services", "more_services", "feature_strip"]
+        return ((store.remoteAppControl?.config.ui.sectionOrder ?? []) + defaults).reduce(into: [String]()) { result, id in
+            if defaults.contains(id) && !result.contains(id) { result.append(id) }
+        }
     }
 }
 
