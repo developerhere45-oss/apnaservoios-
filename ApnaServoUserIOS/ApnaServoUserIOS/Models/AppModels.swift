@@ -250,7 +250,7 @@ struct ServiceItem: Identifiable, Hashable, Codable {
     let rating: String
 
     var priceLabel: String {
-        price > 0 ? "Rs \(price)" : "Quote"
+        "Price after inspection"
     }
 }
 
