@@ -923,6 +923,13 @@ struct HomeScreen: View {
         ids.compactMap { id in store.services.first(where: { $0.id == id }) }
     }
 
+    private var orderedSections: [String] {
+        let defaults = ["quick_services", "commercial", "popular_services", "more_services", "feature_strip"]
+        return ((store.remoteAppControl?.config.ui.sectionOrder ?? []) + defaults).reduce(into: [String]()) { result, id in
+            if defaults.contains(id) && !result.contains(id) { result.append(id) }
+        }
+    }
+
     private var physicalScreenHeight: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
@@ -991,12 +998,6 @@ private struct InspectionPricingCard: View {
         .accessibilityIdentifier("inspectionPricingCard")
     }
 
-    private var orderedSections: [String] {
-        let defaults = ["quick_services", "commercial", "popular_services", "more_services", "feature_strip"]
-        return ((store.remoteAppControl?.config.ui.sectionOrder ?? []) + defaults).reduce(into: [String]()) { result, id in
-            if defaults.contains(id) && !result.contains(id) { result.append(id) }
-        }
-    }
 }
 
 private struct OutsideServiceAreaBanner: View {
