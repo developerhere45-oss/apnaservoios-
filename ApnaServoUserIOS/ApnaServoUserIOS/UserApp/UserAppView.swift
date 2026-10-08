@@ -3261,6 +3261,15 @@ private struct ServicePaymentPage: View {
     let booking: Booking
     @State private var showsCounterOffer = false
 
+    private var paymentSummary: String {
+        guard booking.hasDiscount else {
+            return "The exact amount was sent by your service partner after completing the service."
+        }
+
+        let discountName = booking.discountName.isEmpty ? "Your discount" : booking.discountName
+        return "\(discountName) has already been included in this payable amount."
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             BookingStateHero(icon: "checkmark.circle.fill", title: "Service Completed!", subtitle: "Your service has been completed successfully.", accent: AppTheme.green)
@@ -3288,7 +3297,7 @@ private struct ServicePaymentPage: View {
                     Image(systemName: "doc.text.fill").font(.system(size: 30)).foregroundStyle(AppTheme.booking.opacity(0.7))
                 }
                 Divider()
-                Text(booking.hasDiscount ? "\(booking.discountName.isEmpty ? \"Your discount\" : booking.discountName) has already been included in this payable amount." : "The exact amount was sent by your service partner after completing the service.")
+                Text(paymentSummary)
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
