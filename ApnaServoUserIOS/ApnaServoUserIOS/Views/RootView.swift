@@ -7,11 +7,17 @@ struct RootView: View {
     @EnvironmentObject private var store: UserAppStore
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var networkMonitor = UserNetworkMonitor()
+    @State private var isShowingLaunchLoading = true
 
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             UserAppView()
+            if isShowingLaunchLoading {
+                IOSLaunchLoadingOverlay()
+                    .transition(.opacity)
+                    .zIndex(50)
+            }
             if networkMonitor.isOffline {
                 OfflineReconnectScreen {
                     Task { await networkMonitor.retry() }
@@ -23,14 +29,32 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOffline)
         .tint(store.remotePrimaryColor)
         .task {
+            let startedAt = Date()
             store.configureAppServices()
             // Marketing/configuration is non-critical. Never hold the launch
             // screen while waiting for it; the bundled UI is a safe fallback.
             Task { await store.refreshRemoteAppControl() }
-            guard store.screen == .splash else { return }
-            if await store.restoreAuthenticatedSession() { return }
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            store.finishSplash()
+            let restored: Bool
+            if store.screen == .splash {
+                restored = await store.restoreAuthenticatedSession()
+            } else {
+                restored = false
+            }
+
+            // Keep the branded loader visible long enough to feel intentional,
+            // while the session, cached configuration and initial data prepare
+            // behind it. It does not run again when switching tabs.
+            let minimumDuration: TimeInterval = 2.4
+            let remaining = minimumDuration - Date().timeIntervalSince(startedAt)
+            if remaining > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+            }
+            if !restored && store.screen == .splash {
+                store.finishSplash()
+            }
+            withAnimation(.easeOut(duration: 0.32)) {
+                isShowingLaunchLoading = false
+            }
         }
         .alert("ApnaServo", isPresented: Binding(
             get: { !store.toastMessage.isEmpty },
@@ -69,6 +93,60 @@ struct RootView: View {
                    !["completed", "cancelled", "rejected"].contains(booking.status) {
                     store.startBookingPolling()
                 }
+            }
+        }
+    }
+}
+
+private struct IOSLaunchLoadingOverlay: View {
+    @State private var pulses = false
+    @State private var floats = false
+
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            Circle()
+                .fill(AppTheme.rose.opacity(0.05))
+                .frame(width: 280, height: 280)
+                .scaleEffect(pulses ? 1.08 : 0.9)
+                .blur(radius: 1)
+
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 142, height: 142)
+                        .shadow(color: AppTheme.rose.opacity(pulses ? 0.28 : 0.16), radius: pulses ? 25 : 14, y: 10)
+                    AndroidAssetImage(name: "as_loading_logo", contentMode: .fill)
+                        .frame(width: 126, height: 126)
+                        .clipShape(Circle())
+                        .scaleEffect(pulses ? 1.02 : 0.96)
+                }
+                .offset(y: floats ? -7 : 7)
+
+                AndroidAssetImage(name: "apna_servo_wordmark", contentMode: .fit)
+                    .frame(width: 190, height: 54)
+                    .accessibilityLabel("ApnaServo")
+
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .tint(AppTheme.rose)
+                        .controlSize(.regular)
+                    Text("Preparing your home services")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("ApnaServo is loading")
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
+                pulses = true
+            }
+            withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+                floats = true
             }
         }
     }

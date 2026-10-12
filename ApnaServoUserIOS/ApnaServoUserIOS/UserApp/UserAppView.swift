@@ -10,6 +10,7 @@ struct UserAppView: View {
         ZStack(alignment: .bottom) {
             screenContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
 
             if showsFloatingFooter, let booking = store.latestBooking {
                 FloatingBookingFooter(booking: booking)
@@ -34,6 +35,7 @@ struct UserAppView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: store.showSavedAddressCard)
+        .animation(.easeInOut(duration: 0.24), value: store.screen)
     }
 
     private var showsBottomNav: Bool {
