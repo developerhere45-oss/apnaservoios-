@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "502334731515",
+    "project_id": "apnaservo-partner-test",
+    "storage_bucket": "apnaservo-partner-test.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:502334731515:android:8cc427fffab22593f32c5e",
+        "android_client_info": {
+          "package_name": "com.apnaservo.partner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "502334731515-lhb2gr3fviep55o71oddkck2mhav9jjr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apnaservo.partner",
+            "certificate_hash": "f390ea6bb829f6a087fe5a3d8aa9c012e37d1a25"
+          }
+        },
+        {
+          "client_id": "502334731515-kcrifdse9d5qvs9s3mgvc1hg8ul7ha0e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxPDkkRPXHAfRs5b9nWokUw01sBjfdb8E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "502334731515-kcrifdse9d5qvs9s3mgvc1hg8ul7ha0e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

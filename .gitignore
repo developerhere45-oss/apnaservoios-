@@ -20,6 +20,14 @@ Package.resolved
 *.p8
 GoogleService-Info.plist
 !ApnaServoUserIOS/ApnaServoUserIOS/GoogleService-Info.plist
+upload-keystore.properties
+local.properties
+.gradle/
+
+# Discarded staging folders from the Android import; Gradle uses res_final.
+ApnaServoPartnerAndroid/app/src/main/res/
+ApnaServoPartnerAndroid/app/src/main/res_clean/
+ApnaServoPartnerAndroid/app/src/main/res_ready/
 
 # Local Codex and macOS artifacts
 .codex-git-push.log

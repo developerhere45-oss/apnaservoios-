@@ -1,0 +1,8 @@
+<resources>
+    <style name="AppLaunchTheme" parent="AppTheme">
+        <!-- Plain brand-cream system splash with no icon, so "ApnaServo" is shown only once
+             by the in-app splash (logo + Powered by MALCHETRA Group) instead of appearing
+             twice. The background matches the in-app splash for a seamless hand-off. -->
+        <item name="android:windowSplashScreenBackground">@color/apnaservo_launcher_background</item>
+    </style>
+</resources>
