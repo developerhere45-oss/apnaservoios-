@@ -1,41 +1,77 @@
 {
   "project_info": {
-    "project_number": "502334731515",
-    "project_id": "apnaservo-partner-test",
-    "storage_bucket": "apnaservo-partner-test.firebasestorage.app"
+    "project_number": "525255192682",
+    "firebase_url": "https://apna-servo-default-rtdb.firebaseio.com",
+    "project_id": "apna-servo",
+    "storage_bucket": "apna-servo.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:502334731515:android:8cc427fffab22593f32c5e",
+        "mobilesdk_app_id": "1:525255192682:android:0ea8c88386befd3b579a13",
         "android_client_info": {
           "package_name": "com.apnaservo.partner"
         }
       },
       "oauth_client": [
         {
-          "client_id": "502334731515-lhb2gr3fviep55o71oddkck2mhav9jjr.apps.googleusercontent.com",
+          "client_id": "525255192682-5n50ap66odar8rtfr7m4f8g7fs2qira8.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.apnaservo.partner",
-            "certificate_hash": "f390ea6bb829f6a087fe5a3d8aa9c012e37d1a25"
+            "certificate_hash": "ca406e18ea446045ce2ab0be3b1b6d224e3ca5f4"
           }
         },
         {
-          "client_id": "502334731515-kcrifdse9d5qvs9s3mgvc1hg8ul7ha0e.apps.googleusercontent.com",
+          "client_id": "525255192682-q07j1ppb27kkgd9b8hlcs5qpspbfoddq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apnaservo.partner",
+            "certificate_hash": "9f0e245b245ab88917e471356370f3b35feb034f"
+          }
+        },
+        {
+          "client_id": "525255192682-qe0l41432sdcvq5go6im05thvmimktr9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apnaservo.partner",
+            "certificate_hash": "79ad570c201a32f21e3ed392ba92d3941303c3bf"
+          }
+        },
+        {
+          "client_id": "525255192682-r584nqkg10vcoa1lu412h4qeqoij9sul.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apnaservo.partner",
+            "certificate_hash": "0916ec500ca2870df12a224f5b465f5858793e56"
+          }
+        },
+        {
+          "client_id": "525255192682-t50jlr9k901pa7nfm9auvlm940df2rmk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apnaservo.partner",
+            "certificate_hash": "40ba3faea273721b79ad864bf37079477de8cc56"
+          }
+        },
+        {
+          "client_id": "525255192682-0n4dnbed39j3h1706j6u5egr2so595up.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDxPDkkRPXHAfRs5b9nWokUw01sBjfdb8E"
+          "current_key": "AIzaSyD8X6xkQ67FRPhJRyiZEv1SqZmjiNxnR9c"
+        },
+        {
+          "current_key": "AIzaSyAwri3PUFEjs4k_EYOk_LZ7-i9YRe-D6oo"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "502334731515-kcrifdse9d5qvs9s3mgvc1hg8ul7ha0e.apps.googleusercontent.com",
+              "client_id": "525255192682-0n4dnbed39j3h1706j6u5egr2so595up.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
